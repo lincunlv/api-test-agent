@@ -101,6 +101,7 @@ public class TaskPersistenceService {
             jsonLine.getBytes(StandardCharsets.UTF_8),
             StandardOpenOption.CREATE,
             StandardOpenOption.APPEND);
+        upsertTaskRecord(taskRecord);
         int currentCount = safeInteger(taskRecord.getExecutionEventCount());
         int nextCount = currentCount + 1;
         taskRecord.setExecutionEventCount(nextCount);
