@@ -89,6 +89,14 @@
 4. `methodSourceQuery`：可手动指定源码查询条件
 5. `gitDiffQuery`：可选。自动采集 git diff 代码变更并写入任务上下文
 
+不同 `taskType` 的典型用途如下：
+
+1. `A1`：业务逻辑梳理，输出主流程、关键分支和测试关注点。
+2. `A2`：Bug 风险分析，输出风险清单、观测点和优先验证建议。
+3. `A3`：测试用例生成，输出测试用例、测试数据和核心观测点。
+4. `A4`：Diff 关联接口用例生成，输出增量测试点、关联接口和回归建议。
+5. `A5`：API 文档生成，输出接口说明和测试联调提示。
+
 ### 3.4 成功响应示例
 
 ```json
@@ -309,9 +317,34 @@
   "changedFiles": [
     "src/main/java/com/apitestagent/service/AgentTaskService.java"
   ],
+  "changedClasses": [
+    "AgentTaskService"
+  ],
+  "changedMethods": [
+    "createTask"
+  ],
+  "relatedInterfaces": [
+    {
+      "controllerClass": "AgentTaskController",
+      "handlerMethod": "createTask",
+      "httpMethod": "POST",
+      "path": "/api/agent/tasks",
+      "relationType": "INDIRECT",
+      "evidence": "引用变更类: AgentTaskService",
+      "sourceFile": "src/main/java/com/apitestagent/web/AgentTaskController.java"
+    }
+  ],
   "diffOutput": "diff --git a/src/main/java/..."
 }
 ```
+
+响应中的关键字段说明：
+
+1. `changedFiles`：本次 diff 影响的文件列表。
+2. `changedClasses`：从变更文件推导出的类级影响对象。
+3. `changedMethods`：从 diff 文本中抽取出的可能受影响方法。
+4. `relatedInterfaces`：结合代码引用关系识别出的直接或间接受影响接口，可直接作为 A4 的结构化证据输入。
+5. `diffOutput`：原始 diff 文本，用于人工复核。
 
 ### 6.5 失败响应示例
 
@@ -475,6 +508,17 @@
 ### 11.4 `git-diff.patch`
 
 当请求启用了 `options.gitDiffQuery` 时，自动归档当前采集到的 git diff 内容。
+
+### 11.5 `diff-impact.json`
+
+当任务类型为 `A4` 且启用了 `options.gitDiffQuery` 时，自动归档结构化变更影响摘要，通常包含：
+
+1. `changedFiles`
+2. `changedClasses`
+3. `changedMethods`
+4. `relatedInterfaces`
+
+该文件适合前端展示、测试回归范围评估和后续自动化处理。
 
 ## 12. 联调建议
 
