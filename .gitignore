@@ -1,0 +1,6 @@
+target/
+.idea/
+.vscode/
+*.log
+logs/
+workspace/agent_files/

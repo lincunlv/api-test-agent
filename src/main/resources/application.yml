@@ -1,0 +1,34 @@
+spring:
+  application:
+    name: api-test-agent
+
+server:
+  port: 8080
+  servlet:
+    encoding:
+      charset: UTF-8
+      enabled: true
+      force: true
+
+agent:
+  analysis:
+    renderer-mode: template
+    llm-model: "gpt-5.4-mini"
+    llm-base-url: "https://yunwu.ai"
+    llm-api-key: "sk-fVnJtleMdAlNcwVeqA57uMmzNVKKXyxQBUjSrkTMrrgslG9b"
+    llm-path: /v1/chat/completions
+    llm-connect-timeout-ms: 5000
+    llm-read-timeout-ms: 60000
+    llm-temperature: 0.2
+    llm-max-tokens: 2000
+    max-prompt-length: 4000
+    max-context-characters: 12000
+    retry-max-attempts: 2
+    retry-backoff-ms: 150
+  storage:
+    workspace-base-dir: workspace/agent_files
+    skills-base-dir: skills/interface-chain-analyzer
+
+logging:
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} [requestId=%X{requestId}] - %msg%n"
