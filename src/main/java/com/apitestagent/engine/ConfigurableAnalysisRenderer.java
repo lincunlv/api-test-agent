@@ -36,7 +36,15 @@ public class ConfigurableAnalysisRenderer implements AnalysisRenderer {
     public String render(CreateTaskRequest request, SkillType skillType, SkillBundle skillBundle, String taskId) {
         String requestedMode = resolveRequestedMode(request.getOptions());
         if (LLM_MODE.equalsIgnoreCase(requestedMode)) {
-            return llmAnalysisAdapter.render(buildLlmRenderRequest(request, skillType, skillBundle, taskId));
+            try {
+                return llmAnalysisAdapter.render(buildLlmRenderRequest(request, skillType, skillBundle, taskId));
+            } catch (IllegalStateException ex) {
+                if (!shouldFallbackToTemplate(ex)) {
+                    throw ex;
+                }
+                return templateAnalysisRenderer.render(request, skillType, skillBundle, taskId)
+                    + "\n\n## LLM Fallback\n\n原因: " + ex.getMessage();
+            }
         }
         if (MOCK_FAILURE_MODE.equalsIgnoreCase(requestedMode)) {
             throw new IllegalStateException(resolveFailureMessage(request.getOptions()));
@@ -69,6 +77,17 @@ public class ConfigurableAnalysisRenderer implements AnalysisRenderer {
             return "mock renderer failure";
         }
         return String.valueOf(options.get("mockFailureMessage"));
+    }
+
+    private boolean shouldFallbackToTemplate(IllegalStateException ex) {
+        String message = ex.getMessage();
+        if (!StringUtils.hasText(message)) {
+            return false;
+        }
+        return message.contains("LLM response")
+            || message.contains("LLM upstream error")
+            || message.contains("Failed to parse LLM response")
+            || message.contains("LLM request failed");
     }
 
     private LlmRenderRequest buildLlmRenderRequest(CreateTaskRequest request,

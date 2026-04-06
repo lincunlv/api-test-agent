@@ -142,6 +142,25 @@ class AnalysisPipelineTests {
         assertTrue(exception.getMessage().contains("LLM renderer is not configured"));
     }
 
+    @Test
+    void shouldFallbackToTemplateWhenLlmResponseIsUnusable() {
+        AnalysisProperties properties = new AnalysisProperties();
+        properties.setRendererMode("llm");
+
+        ConfigurableAnalysisRenderer renderer = new ConfigurableAnalysisRenderer(
+            properties,
+            new TemplateAnalysisRenderer(),
+            request -> {
+                throw new IllegalStateException("LLM response does not contain supported content fields");
+            }
+        );
+
+        String content = renderer.render(sampleRequest("正常请求"), SkillType.A4, sampleSkillBundle(), "task-llm-fallback");
+
+        assertTrue(content.contains("LLM Fallback"));
+        assertTrue(content.contains("LLM response does not contain supported content fields"));
+    }
+
     private CreateTaskRequest sampleRequest(String prompt) {
         CreateTaskRequest request = new CreateTaskRequest();
         request.setTaskType("A1");
