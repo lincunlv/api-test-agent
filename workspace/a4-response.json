@@ -1,0 +1,20 @@
+﻿{
+    "taskId":  "742896c925024d838ff80acc41fd242e",
+    "skillCode":  "A4",
+    "skillName":  "Diff 关联接口用例生成",
+    "status":  "FAILED",
+    "prompt":  "请基于当前暂存的 git diff 生成增量回归方案与关联接口测试用例",
+    "workspacePath":  "workspace\\agent_files\\a4\\742896c925024d838ff80acc41fd242e",
+    "artifacts":  [
+                      "input.json",
+                      "git-diff.patch",
+                      "diff-impact.json",
+                      "source-context.md"
+                  ],
+    "message":  "任务执行失败，请检查 trace-summary.json 和 execution-events.jsonl。",
+    "lastError":  "分析执行失败, taskId=742896c925024d838ff80acc41fd242e, reason=LLM response does not contain choices[0].message.content",
+    "executionEventCount":  7,
+    "sourceLookupApplied":  true,
+    "createdAt":  "2026-04-06T03:44:42.379163400Z",
+    "updatedAt":  "2026-04-06T03:45:07.351156400Z"
+}

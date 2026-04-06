@@ -32,6 +32,30 @@
 
 ## 启动方式
 
+## 本地 MySQL 持久化配置
+
+服务已默认接入本地 MySQL，并使用以下默认值：
+
+1. 主机：`127.0.0.1`
+2. 端口：`3306`
+3. 数据库：`api_test_agent`
+4. 用户名：`root`
+5. 密码：`root123456`
+
+首次启动时会通过 JDBC 参数自动创建 `api_test_agent` 数据库，便于本地测试数据持久化。
+
+服务启动时会通过 Flyway 自动执行数据库版本脚本，初始化 3 张核心表：`agent_task`、`agent_task_event`、`agent_task_artifact`。
+
+当前这 3 张表先用于承接后续数据库持久化改造的核心模型：
+
+1. `agent_task`：任务主记录。
+2. `agent_task_event`：任务执行事件流水。
+3. `agent_task_artifact`：任务产物元数据与可选正文。
+
+当前数据库访问层按 MyBatis-Plus 组织，后续任务、事件、产物持久化统一通过 Mapper 层处理。
+
+如需覆盖默认值，可通过环境变量传入：`DB_HOST`、`DB_PORT`、`DB_NAME`、`DB_USERNAME`、`DB_PASSWORD`。
+
 ### Windows
 
 ```bat

@@ -1,0 +1,11 @@
+﻿Invoke-WebRequest : The remote server returned an error: (500) Internal Server 
+Error.
+At line:1 char:856
++ ... h 12; try { Invoke-WebRequest -UseBasicParsing -Uri 'http://127.0.0.1 ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : InvalidOperation: (System.Net.HttpWebRequest:Htt 
+   pWebRequest) [Invoke-WebRequest], WebException
+    + FullyQualifiedErrorId : WebCmdletWebResponseException,Microsoft.PowerShe 
+   ll.Commands.InvokeWebRequestCommand
+ 
+

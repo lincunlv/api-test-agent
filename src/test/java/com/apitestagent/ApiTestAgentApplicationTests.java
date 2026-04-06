@@ -13,6 +13,7 @@ import java.util.Map;
 import java.util.Objects;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -135,6 +136,66 @@ class ApiTestAgentApplicationTests {
         assertTrue(jsonNode.get("relatedInterfaces").toString().contains("/orders"));
         assertTrue(jsonNode.get("relatedInterfaces").toString().contains("createOrder"));
         assertTrue(jsonNode.get("diffOutput").asText().contains("updated"));
+    }
+
+    @Test
+    void shouldFetchGitHistoryFromTemporaryRepository() throws Exception {
+        Path repositoryPath = createTempJavaApiRepository();
+        Path serviceFile = repositoryPath.resolve(Paths.get("src", "main", "java", "com", "example", "service", "OrderService.java"));
+        Files.write(serviceFile,
+            Arrays.asList(
+                "package com.example.service;",
+                "",
+                "public class OrderService {",
+                "    public String createOrder(String request) {",
+                "        return \"history-updated\";",
+                "    }",
+                "}"),
+            StandardCharsets.UTF_8);
+        runGitCommand(repositoryPath, "git", "add", ".");
+        runGitCommand(repositoryPath, "git", "commit", "-m", "update order service");
+
+        Map<String, Object> request = new LinkedHashMap<>();
+        request.put("repositoryPath", repositoryPath.toString());
+        request.put("maxCount", 1);
+        request.put("pageNumber", 0);
+        String requestJson = objectMapper.writeValueAsString(request);
+
+        String response = mockMvc.perform(post("/api/agent/tools/get-git-history")
+                .contentType("application/json")
+                .content(Objects.requireNonNull(requestJson)))
+            .andExpect(status().isOk())
+            .andReturn()
+            .getResponse()
+            .getContentAsString();
+
+        JsonNode jsonNode = objectMapper.readTree(response);
+        assertEquals(repositoryPath.toAbsolutePath().normalize().toString(), jsonNode.get("repositoryPath").asText());
+        assertTrue(jsonNode.get("currentBranch").asText().length() > 0);
+        assertTrue(jsonNode.get("refs").isArray());
+        assertTrue(jsonNode.get("refs").size() >= 1);
+        assertTrue(jsonNode.get("commits").isArray());
+        assertEquals(1, jsonNode.get("commits").size());
+        assertTrue(jsonNode.get("totalCount").asInt() >= 2);
+        assertTrue(jsonNode.get("hasNextPage").asBoolean());
+        assertTrue(jsonNode.get("commits").toString().contains("update order service"));
+
+        request.put("searchQuery", "update order service");
+        request.put("pageNumber", 0);
+        request.put("maxCount", 10);
+        String searchResponse = mockMvc.perform(post("/api/agent/tools/get-git-history")
+                .contentType("application/json")
+                .content(objectMapper.writeValueAsString(request)))
+            .andExpect(status().isOk())
+            .andReturn()
+            .getResponse()
+            .getContentAsString();
+
+        JsonNode searchJson = objectMapper.readTree(searchResponse);
+        assertEquals("update order service", searchJson.get("searchQuery").asText());
+        assertEquals(1, searchJson.get("totalCount").asInt());
+        assertFalse(searchJson.get("hasNextPage").asBoolean());
+        assertTrue(searchJson.get("commits").toString().contains("update order service"));
     }
 
     @Test

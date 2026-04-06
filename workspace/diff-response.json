@@ -1,0 +1,37 @@
+﻿{
+    "repositoryPath":  "g:\\api-test-agent",
+    "diffRange":  null,
+    "cached":  true,
+    "truncated":  false,
+    "changedFiles":  [
+                         "skills/interface-chain-analyzer/references/A4-diff.md",
+                         "src/main/java/com/apitestagent/service/GitDiffService.java"
+                     ],
+    "changedClasses":  [
+                           "GitDiffService"
+                       ],
+    "changedMethods":  [
+
+                       ],
+    "relatedInterfaces":  [
+                              {
+                                  "controllerClass":  "AgentToolController",
+                                  "handlerMethod":  "getMethodSource",
+                                  "httpMethod":  "POST",
+                                  "path":  "/api/agent/tools/get-git-diff",
+                                  "relationType":  "INDIRECT",
+                                  "evidence":  "引用变更类: GitDiffService",
+                                  "sourceFile":  "src/main/java/com/apitestagent/web/AgentToolController.java"
+                              },
+                              {
+                                  "controllerClass":  "AgentToolController",
+                                  "handlerMethod":  "getMethodSource",
+                                  "httpMethod":  "POST",
+                                  "path":  "/api/agent/tools/get-method-source",
+                                  "relationType":  "INDIRECT",
+                                  "evidence":  "引用变更类: GitDiffService",
+                                  "sourceFile":  "src/main/java/com/apitestagent/web/AgentToolController.java"
+                              }
+                          ],
+    "diffOutput":  "diff --git a/skills/interface-chain-analyzer/references/A4-diff.md b/skills/interface-chain-analyzer/references/A4-diff.md\nindex 3708b13..2ca62a7 100644\n--- a/skills/interface-chain-analyzer/references/A4-diff.md\n+++ b/skills/interface-chain-analyzer/references/A4-diff.md\n@@ -21,6 +21,7 @@\n 5. 每条用例都要说明触发原因，原因必须来自 diff、受影响方法或关联接口证据。\n 6. 回归建议必须区分：必回归、建议回归、暂不回归。\n 7. 对无法从 diff 直接确认的部分标记为待确认，禁止编造。\n+8. 若存在工具输出的 relatedInterfaces，优先以该结构化结果作为关联接口证据来源。\n \n ## 输出约束\n \ndiff --git a/src/main/java/com/apitestagent/service/GitDiffService.java b/src/main/java/com/apitestagent/service/GitDiffService.java\nindex 795a411..6caf71d 100644\n--- a/src/main/java/com/apitestagent/service/GitDiffService.java\n+++ b/src/main/java/com/apitestagent/service/GitDiffService.java\n@@ -49,6 +49,7 @@ public class GitDiffService {\n         view.setCached(Boolean.TRUE.equals(effectiveRequest.getCached()));\n         view.setChangedFiles(changedFiles);\n         applyDiffOutput(view, diffOutput, effectiveRequest.getMaxCharacters());\n+        // Keep impact analysis close to raw diff extraction so A4 can consume one structured payload.\n         view.setChangedClasses(extractChangedClasses(changedFiles));\n         view.setChangedMethods(extractChangedMethods(diffOutput));\n         view.setRelatedInterfaces(findRelatedInterfaces(repositoryPath, changedFiles, view.getChangedClasses(), view.getChangedMethods()));\n"
+}

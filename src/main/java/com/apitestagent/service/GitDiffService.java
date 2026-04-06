@@ -22,8 +22,12 @@ import java.util.regex.Pattern;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
+import com.apitestagent.web.dto.GitCommitView;
 import com.apitestagent.web.dto.GitDiffQueryRequest;
 import com.apitestagent.web.dto.GitDiffView;
+import com.apitestagent.web.dto.GitHistoryQueryRequest;
+import com.apitestagent.web.dto.GitHistoryView;
+import com.apitestagent.web.dto.GitReferenceView;
 import com.apitestagent.web.dto.RelatedInterfaceView;
 
 @Service
@@ -34,6 +38,31 @@ public class GitDiffService {
     private static final Pattern REQUEST_MAPPING_PATTERN = Pattern.compile("@RequestMapping\\((.*)\\)");
     private static final Pattern QUOTED_PATH_PATTERN = Pattern.compile("\"([^\"]*)\"");
     private static final Pattern REQUEST_METHOD_PATTERN = Pattern.compile("RequestMethod\\.(GET|POST|PUT|DELETE|PATCH)");
+    private static final String FIELD_SEPARATOR = "\u001F";
+    private static final String LINE_SPLIT_REGEX = "\\r?\\n";
+
+    public GitHistoryView getGitHistory(GitHistoryQueryRequest request) throws IOException {
+        GitHistoryQueryRequest effectiveRequest = request == null ? new GitHistoryQueryRequest() : request;
+        Path repositoryPath = resolveRepositoryPath(effectiveRequest.getRepositoryPath());
+        validateRepositoryPath(repositoryPath);
+        int pageNumber = resolvePageNumber(effectiveRequest.getPageNumber());
+        int pageSize = resolvePageSize(effectiveRequest.getMaxCount());
+        String searchQuery = normalizeSearchQuery(effectiveRequest.getSearchQuery());
+
+        GitHistoryView view = new GitHistoryView();
+        view.setRepositoryPath(repositoryPath.toString());
+        view.setCurrentBranch(resolveCurrentBranch(repositoryPath));
+        view.setResolvedRef(resolveHistoryRef(effectiveRequest, view.getCurrentBranch()));
+        view.setSearchQuery(searchQuery);
+        view.setPageNumber(pageNumber);
+        view.setPageSize(pageSize);
+        view.setRefs(readReferences(repositoryPath));
+        CommitPage commitPage = readCommits(repositoryPath, view.getResolvedRef(), searchQuery, pageNumber, pageSize);
+        view.setCommits(commitPage.commits);
+        view.setTotalCount(commitPage.totalCount);
+        view.setHasNextPage(commitPage.hasNextPage);
+        return view;
+    }
 
     public GitDiffView getGitDiff(GitDiffQueryRequest request) throws IOException {
         GitDiffQueryRequest effectiveRequest = request == null ? new GitDiffQueryRequest() : request;
@@ -75,7 +104,7 @@ public class GitDiffService {
             return Collections.emptyList();
         }
         Set<String> methods = new LinkedHashSet<>();
-        String[] lines = diffOutput.split("\\r?\\n");
+        String[] lines = splitLines(diffOutput);
         String currentMethod = null;
         for (String line : lines) {
             String normalizedLine = normalizeDiffLine(line);
@@ -452,6 +481,183 @@ public class GitDiffService {
         return command;
     }
 
+    private String resolveCurrentBranch(Path repositoryPath) throws IOException {
+        String output = execute(repositoryPath, createCommand("git", "rev-parse", "--abbrev-ref", "HEAD"), "git 当前分支查询");
+        String currentBranch = firstNonBlankLine(output);
+        return StringUtils.hasText(currentBranch) ? currentBranch : "HEAD";
+    }
+
+    private String resolveHistoryRef(GitHistoryQueryRequest request, String currentBranch) {
+        if (StringUtils.hasText(request.getRef())) {
+            return request.getRef().trim();
+        }
+        return StringUtils.hasText(currentBranch) ? currentBranch : "HEAD";
+    }
+
+    private List<GitReferenceView> readReferences(Path repositoryPath) throws IOException {
+        String output = execute(repositoryPath,
+            createCommand(
+                "git",
+                "for-each-ref",
+                "--sort=-committerdate",
+                "--format=%(refname:short)" + FIELD_SEPARATOR + "%(refname)" + FIELD_SEPARATOR + "%(objectname:short)" + FIELD_SEPARATOR + "%(committerdate:iso-strict)",
+                "refs/heads",
+                "refs/tags"),
+            "git 引用列表查询");
+        if (!StringUtils.hasText(output)) {
+            return Collections.emptyList();
+        }
+
+        List<GitReferenceView> refs = new ArrayList<>();
+        for (String line : splitLines(output)) {
+            if (StringUtils.hasText(line)) {
+                String[] parts = line.split(FIELD_SEPARATOR, -1);
+                if (parts.length >= 4) {
+                    GitReferenceView view = new GitReferenceView();
+                    view.setName(parts[0]);
+                    view.setFullName(parts[1]);
+                    view.setType(parts[1].startsWith("refs/tags/") ? "TAG" : "BRANCH");
+                    view.setTarget(parts[2]);
+                    view.setUpdatedAt(parts[3]);
+                    refs.add(view);
+                }
+            }
+        }
+        return refs;
+    }
+
+    private CommitPage readCommits(Path repositoryPath,
+                                   String ref,
+                                   String searchQuery,
+                                   int pageNumber,
+                                   int pageSize) throws IOException {
+        if (!StringUtils.hasText(searchQuery)) {
+            return readCommitPage(repositoryPath, ref, pageNumber, pageSize);
+        }
+        return searchCommitPage(repositoryPath, ref, searchQuery, pageNumber, pageSize);
+    }
+
+    private CommitPage readCommitPage(Path repositoryPath, String ref, int pageNumber, int pageSize) throws IOException {
+        int totalCount = readCommitCount(repositoryPath, ref);
+        int offset = pageNumber * pageSize;
+        if (offset >= totalCount) {
+            return new CommitPage(Collections.<GitCommitView>emptyList(), totalCount, false);
+        }
+
+        List<String> command = createCommand(
+            "git",
+            "log",
+            "--date=iso-strict",
+            "--pretty=format:%H" + FIELD_SEPARATOR + "%h" + FIELD_SEPARATOR + "%s" + FIELD_SEPARATOR + "%an" + FIELD_SEPARATOR + "%ad",
+            "-n",
+            String.valueOf(pageSize),
+            "--skip",
+            String.valueOf(offset));
+        if (StringUtils.hasText(ref)) {
+            command.add(ref);
+        }
+        String output = execute(repositoryPath, command, "git 提交历史查询");
+        List<GitCommitView> commits = parseCommitViews(output);
+        return new CommitPage(commits, totalCount, offset + commits.size() < totalCount);
+    }
+
+    private CommitPage searchCommitPage(Path repositoryPath,
+                                        String ref,
+                                        String searchQuery,
+                                        int pageNumber,
+                                        int pageSize) throws IOException {
+        List<String> command = createCommand(
+            "git",
+            "log",
+            "--date=iso-strict",
+            "--pretty=format:%H" + FIELD_SEPARATOR + "%h" + FIELD_SEPARATOR + "%s" + FIELD_SEPARATOR + "%an" + FIELD_SEPARATOR + "%ad");
+        if (StringUtils.hasText(ref)) {
+            command.add(ref);
+        }
+        String output = execute(repositoryPath, command, "git 提交历史搜索");
+        List<GitCommitView> matchedCommits = new ArrayList<>();
+        for (GitCommitView commit : parseCommitViews(output)) {
+            if (matchesCommitSearch(commit, searchQuery)) {
+                matchedCommits.add(commit);
+            }
+        }
+        int totalCount = matchedCommits.size();
+        int offset = pageNumber * pageSize;
+        if (offset >= totalCount) {
+            return new CommitPage(Collections.<GitCommitView>emptyList(), totalCount, false);
+        }
+        int endIndex = Math.min(offset + pageSize, totalCount);
+        return new CommitPage(new ArrayList<>(matchedCommits.subList(offset, endIndex)), totalCount, endIndex < totalCount);
+    }
+
+    private int readCommitCount(Path repositoryPath, String ref) throws IOException {
+        List<String> command = createCommand("git", "rev-list", "--count");
+        if (StringUtils.hasText(ref)) {
+            command.add(ref);
+        } else {
+            command.add("HEAD");
+        }
+        String output = execute(repositoryPath, command, "git 提交总数查询");
+        String countText = firstNonBlankLine(output);
+        if (!StringUtils.hasText(countText)) {
+            return 0;
+        }
+        return Integer.parseInt(countText.trim());
+    }
+
+    private List<GitCommitView> parseCommitViews(String output) {
+        if (!StringUtils.hasText(output)) {
+            return Collections.emptyList();
+        }
+
+        List<GitCommitView> commits = new ArrayList<>();
+        for (String line : splitLines(output)) {
+            if (StringUtils.hasText(line)) {
+                String[] parts = line.split(FIELD_SEPARATOR, -1);
+                if (parts.length >= 5) {
+                    GitCommitView view = new GitCommitView();
+                    view.setHash(parts[0]);
+                    view.setShortHash(parts[1]);
+                    view.setSubject(parts[2]);
+                    view.setAuthorName(parts[3]);
+                    view.setAuthoredAt(parts[4]);
+                    commits.add(view);
+                }
+            }
+        }
+        return commits;
+    }
+
+    private boolean matchesCommitSearch(GitCommitView commit, String searchQuery) {
+        if (!StringUtils.hasText(searchQuery)) {
+            return true;
+        }
+        String normalizedQuery = searchQuery.toLowerCase(Locale.ROOT);
+        return containsIgnoreCase(commit.getHash(), normalizedQuery)
+            || containsIgnoreCase(commit.getShortHash(), normalizedQuery)
+            || containsIgnoreCase(commit.getSubject(), normalizedQuery)
+            || containsIgnoreCase(commit.getAuthorName(), normalizedQuery);
+    }
+
+    private boolean containsIgnoreCase(String value, String normalizedQuery) {
+        return StringUtils.hasText(value) && value.toLowerCase(Locale.ROOT).contains(normalizedQuery);
+    }
+
+    private String normalizeSearchQuery(String value) {
+        return StringUtils.hasText(value) ? value.trim() : null;
+    }
+
+    private int resolvePageNumber(Integer pageNumber) {
+        return pageNumber != null && pageNumber >= 0 ? pageNumber : 0;
+    }
+
+    private int resolvePageSize(Integer pageSize) {
+        if (pageSize == null || pageSize <= 0) {
+            return 30;
+        }
+        return Math.min(pageSize, 100);
+    }
+
     private void applyDiffOptions(List<String> command, GitDiffQueryRequest request) {
         if (Boolean.TRUE.equals(request.getCached())) {
             command.add("--cached");
@@ -471,12 +677,12 @@ public class GitDiffService {
     }
 
     private List<String> readLines(Path repositoryPath, List<String> command) throws IOException {
-        String text = execute(repositoryPath, command);
+        String text = execute(repositoryPath, command, "git diff 文件列表查询");
         if (!StringUtils.hasText(text)) {
             return Collections.emptyList();
         }
         List<String> lines = new ArrayList<>();
-        for (String line : text.split("\\r?\\n")) {
+        for (String line : splitLines(text)) {
             if (StringUtils.hasText(line)) {
                 lines.add(line.trim());
             }
@@ -485,10 +691,10 @@ public class GitDiffService {
     }
 
     private String readText(Path repositoryPath, List<String> command) throws IOException {
-        return execute(repositoryPath, command);
+        return execute(repositoryPath, command, "git diff 内容查询");
     }
 
-    private String execute(Path repositoryPath, List<String> command) throws IOException {
+    private String execute(Path repositoryPath, List<String> command, String action) throws IOException {
         ProcessBuilder processBuilder = new ProcessBuilder(command);
         processBuilder.directory(repositoryPath.toFile());
         processBuilder.redirectErrorStream(true);
@@ -497,13 +703,35 @@ public class GitDiffService {
         try {
             int exitCode = process.waitFor();
             if (exitCode != 0) {
-                throw new IllegalStateException("git diff 执行失败: " + output.trim());
+                throw new IllegalStateException(action + "失败: " + output.trim());
             }
             return output;
         } catch (InterruptedException ex) {
             Thread.currentThread().interrupt();
-            throw new IllegalStateException("git diff 执行被中断", ex);
+            throw new IllegalStateException(action + "被中断", ex);
         }
+    }
+
+    private List<String> createCommand(String... values) {
+        List<String> command = new ArrayList<>();
+        Collections.addAll(command, values);
+        return command;
+    }
+
+    private String firstNonBlankLine(String value) {
+        if (!StringUtils.hasText(value)) {
+            return null;
+        }
+        for (String line : splitLines(value)) {
+            if (StringUtils.hasText(line)) {
+                return line.trim();
+            }
+        }
+        return null;
+    }
+
+    private String[] splitLines(String value) {
+        return value.split(LINE_SPLIT_REGEX);
     }
 
     private String readStream(InputStream inputStream) throws IOException {
@@ -552,5 +780,17 @@ public class GitDiffService {
         private String httpMethod;
         private String path;
         private String handlerMethod;
+    }
+
+    private static class CommitPage {
+        private final List<GitCommitView> commits;
+        private final int totalCount;
+        private final boolean hasNextPage;
+
+        private CommitPage(List<GitCommitView> commits, int totalCount, boolean hasNextPage) {
+            this.commits = commits;
+            this.totalCount = totalCount;
+            this.hasNextPage = hasNextPage;
+        }
     }
 }

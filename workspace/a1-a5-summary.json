@@ -1,0 +1,47 @@
+﻿[
+    {
+        "taskType":  "A1",
+        "taskId":  "c7cd63f448034752b16356fc0c2b1de9",
+        "status":  "PARTIAL_SUCCESS",
+        "workspacePath":  "workspace\\agent_files\\a1\\c7cd63f448034752b16356fc0c2b1de9",
+        "sourceLookupApplied":  true,
+        "artifactCount":  4,
+        "message":  "已生成结构化草稿，并自动补充了源码上下文；待接入真实模型执行引擎。"
+    },
+    {
+        "taskType":  "A2",
+        "taskId":  "561c913a1a5842a8bb453c0e54416df3",
+        "status":  "PARTIAL_SUCCESS",
+        "workspacePath":  "workspace\\agent_files\\a2\\561c913a1a5842a8bb453c0e54416df3",
+        "sourceLookupApplied":  true,
+        "artifactCount":  4,
+        "message":  "已生成结构化草稿，并自动补充了源码上下文；待接入真实模型执行引擎。"
+    },
+    {
+        "taskType":  "A3",
+        "taskId":  "4f0445b8b6bc4271b88559ec3ee551fb",
+        "status":  "PARTIAL_SUCCESS",
+        "workspacePath":  "workspace\\agent_files\\a3\\4f0445b8b6bc4271b88559ec3ee551fb",
+        "sourceLookupApplied":  true,
+        "artifactCount":  4,
+        "message":  "已生成结构化草稿，并自动补充了源码上下文；待接入真实模型执行引擎。"
+    },
+    {
+        "taskType":  "A4",
+        "taskId":  "742896c925024d838ff80acc41fd242e",
+        "status":  "FAILED",
+        "workspacePath":  "workspace\\agent_files\\a4\\742896c925024d838ff80acc41fd242e",
+        "sourceLookupApplied":  true,
+        "artifactCount":  4,
+        "message":  "任务执行失败，请检查 trace-summary.json 和 execution-events.jsonl。"
+    },
+    {
+        "taskType":  "A5",
+        "taskId":  "adccbba692974be2a2f9b9bd539aeaa5",
+        "status":  "PARTIAL_SUCCESS",
+        "workspacePath":  "workspace\\agent_files\\a5\\adccbba692974be2a2f9b9bd539aeaa5",
+        "sourceLookupApplied":  true,
+        "artifactCount":  4,
+        "message":  "已生成结构化草稿，并自动补充了源码上下文；待接入真实模型执行引擎。"
+    }
+]

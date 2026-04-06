@@ -1,0 +1,11 @@
+﻿Invoke-RestMethod : The remote server returned an error: (500) Internal Server 
+Error.
+At line:1 char:861
++ ...  try { $r = Invoke-RestMethod -Uri 'http://127.0.0.1:8084/api/agent/t ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : InvalidOperation: (System.Net.HttpWebRequest:Htt 
+   pWebRequest) [Invoke-RestMethod], WebException
+    + FullyQualifiedErrorId : WebCmdletWebResponseException,Microsoft.PowerShe 
+   ll.Commands.InvokeRestMethodCommand
+ 
+

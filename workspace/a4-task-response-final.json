@@ -1,0 +1,21 @@
+﻿{
+    "taskId":  "738edeaad21d477db91fedbab98cbd75",
+    "skillCode":  "A4",
+    "skillName":  "Diff 关联接口用例生成",
+    "status":  "PARTIAL_SUCCESS",
+    "prompt":  "请基于当前暂存的 git diff 生成增量回归方案与关联接口测试用例",
+    "workspacePath":  "workspace\\agent_files\\a4\\738edeaad21d477db91fedbab98cbd75",
+    "artifacts":  [
+                      "input.json",
+                      "git-diff.patch",
+                      "diff-impact.json",
+                      "diff-test-cases.md",
+                      "trace-summary.json"
+                  ],
+    "message":  "已生成结构化草稿；当前未补充源码上下文，待接入真实模型执行引擎。",
+    "lastError":  null,
+    "executionEventCount":  8,
+    "sourceLookupApplied":  false,
+    "createdAt":  "2026-04-06T03:39:50.786687300Z",
+    "updatedAt":  "2026-04-06T03:40:03.923929900Z"
+}

@@ -171,7 +171,42 @@
 }
 ```
 
-## 5. 方法源码查询
+## 5. 查询任务产物内容
+
+### 5.1 接口
+
+`GET /api/agent/tasks/{taskId}/artifacts/{artifactName}`
+
+### 5.2 功能
+
+1. 按任务 ID 读取指定产物内容。
+2. 支持预览 `json`、`jsonl`、`md`、`patch`、`txt` 等文本类文件。
+3. 用于前端任务结果区的在线预览。
+
+### 5.3 成功响应示例
+
+```json
+{
+  "taskId": "a2b3c4d5",
+  "artifactName": "trace-summary.json",
+  "contentType": "application/json",
+  "size": 512,
+  "content": "{\n  \"taskId\": \"a2b3c4d5\"\n}"
+}
+```
+
+### 5.4 失败响应示例
+
+任务产物不存在：
+
+```json
+{
+  "code": "NOT_FOUND",
+  "message": "任务产物不存在: missing.md"
+}
+```
+
+## 6. 方法源码查询
 
 ### 5.1 接口
 
@@ -234,7 +269,7 @@
 }
 ```
 
-## 6. Git Diff 查询
+## 7. Git Diff 查询
 
 ### 6.1 接口
 
@@ -298,7 +333,66 @@
 }
 ```
 
-## 7. rendererMode 约定
+## 8. Git 历史查询
+
+### 8.1 接口
+
+`POST /api/agent/tools/get-git-history`
+
+### 8.2 请求体
+
+```json
+{
+  "repositoryPath": "g:/api-test-agent-service/api-test-agent",
+  "ref": "HEAD",
+  "searchQuery": "createTask",
+  "pageNumber": 0,
+  "maxCount": 30
+}
+```
+
+### 8.3 字段说明
+
+1. `repositoryPath`：可选。git 仓库路径，默认使用当前工作目录。
+2. `ref`：可选。指定查询哪条引用对应的提交历史，默认当前分支。
+3. `searchQuery`：可选。按 commit hash、短 hash、提交标题、作者名模糊搜索。
+4. `pageNumber`：可选。分页页码，从 `0` 开始。
+5. `maxCount`：可选。每页返回提交数量，默认 `30`，最大 `100`。
+
+### 8.4 成功响应示例
+
+```json
+{
+  "repositoryPath": "g:\\api-test-agent-service\\api-test-agent",
+  "currentBranch": "master",
+  "resolvedRef": "master",
+  "searchQuery": "createTask",
+  "pageNumber": 0,
+  "pageSize": 30,
+  "totalCount": 12,
+  "hasNextPage": false,
+  "refs": [
+    {
+      "name": "master",
+      "fullName": "refs/heads/master",
+      "type": "BRANCH",
+      "target": "56c3754",
+      "updatedAt": "2026-04-06T16:00:00+08:00"
+    }
+  ],
+  "commits": [
+    {
+      "hash": "56c3754a1b2c3d4e5f6",
+      "shortHash": "56c3754",
+      "subject": "Initial commit",
+      "authorName": "GitHub Copilot",
+      "authoredAt": "2026-04-06T16:00:00+08:00"
+    }
+  ]
+}
+```
+
+## 9. rendererMode 约定
 
 ### 6.1 `template`
 
@@ -334,7 +428,7 @@
 }
 ```
 
-## 8. 任务状态说明
+## 10. 任务状态说明
 
 当前任务状态包括：
 
@@ -349,7 +443,7 @@
 2. 结果文件已经生成
 3. 但分析内容仍是模板草稿，尚未接入真实模型
 
-## 9. 归档文件说明
+## 11. 归档文件说明
 
 ### 8.1 `task.json`
 
@@ -378,11 +472,11 @@
 4. `sourceLookupApplied`
 5. `lastError`
 
-### 9.4 `git-diff.patch`
+### 11.4 `git-diff.patch`
 
 当请求启用了 `options.gitDiffQuery` 时，自动归档当前采集到的 git diff 内容。
 
-## 10. 联调建议
+## 12. 联调建议
 
 推荐联调顺序：
 

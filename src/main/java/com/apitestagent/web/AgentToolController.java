@@ -14,6 +14,8 @@ import com.apitestagent.service.GitDiffService;
 import com.apitestagent.service.MethodSourceService;
 import com.apitestagent.web.dto.GitDiffQueryRequest;
 import com.apitestagent.web.dto.GitDiffView;
+import com.apitestagent.web.dto.GitHistoryQueryRequest;
+import com.apitestagent.web.dto.GitHistoryView;
 import com.apitestagent.web.dto.MethodSourceQueryRequest;
 import com.apitestagent.web.dto.MethodSourceView;
 
@@ -34,6 +36,11 @@ public class AgentToolController {
     @PostMapping("/get-git-diff")
     public GitDiffView getGitDiff(@RequestBody(required = false) GitDiffQueryRequest request) throws IOException {
         return gitDiffService.getGitDiff(request);
+    }
+
+    @PostMapping("/get-git-history")
+    public GitHistoryView getGitHistory(@RequestBody(required = false) GitHistoryQueryRequest request) throws IOException {
+        return gitDiffService.getGitHistory(request);
     }
 
     @PostMapping("/get-method-source")

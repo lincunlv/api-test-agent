@@ -1,0 +1,20 @@
+﻿{
+    "taskId":  "c7cd63f448034752b16356fc0c2b1de9",
+    "skillCode":  "A1",
+    "skillName":  "业务逻辑梳理",
+    "status":  "PARTIAL_SUCCESS",
+    "prompt":  "请基于 get-git-diff 接口分析调用链路、关键判断与输出结构",
+    "workspacePath":  "workspace\\agent_files\\a1\\c7cd63f448034752b16356fc0c2b1de9",
+    "artifacts":  [
+                      "input.json",
+                      "source-context.md",
+                      "logic-analysis.md",
+                      "trace-summary.json"
+                  ],
+    "message":  "已生成结构化草稿，并自动补充了源码上下文；待接入真实模型执行引擎。",
+    "lastError":  null,
+    "executionEventCount":  8,
+    "sourceLookupApplied":  true,
+    "createdAt":  "2026-04-06T03:43:25.785966400Z",
+    "updatedAt":  "2026-04-06T03:43:37.524338700Z"
+}

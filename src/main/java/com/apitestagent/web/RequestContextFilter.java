@@ -1,6 +1,7 @@
 package com.apitestagent.web;
 
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.util.UUID;
 
 import javax.servlet.FilterChain;
@@ -29,6 +30,8 @@ public class RequestContextFilter extends OncePerRequestFilter {
         }
 
         MDC.put("requestId", requestId);
+        request.setCharacterEncoding(StandardCharsets.UTF_8.name());
+        response.setCharacterEncoding(StandardCharsets.UTF_8.name());
         response.setHeader("X-Request-Id", requestId);
         try {
             filterChain.doFilter(request, response);

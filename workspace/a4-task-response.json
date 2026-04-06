@@ -1,0 +1,22 @@
+﻿{
+    "taskId":  "6fe9989a2c0b421c855af75585b1c130",
+    "skillCode":  "A4",
+    "skillName":  "Diff 关联接口用例生成",
+    "status":  "PARTIAL_SUCCESS",
+    "prompt":  "请根据本次 staged git diff 识别直接影响接口、间接受影响接口，并生成增量测试用例和回归建议。重点关注 get-git-diff 接口以及 A4 模板约束更新。",
+    "workspacePath":  "workspace\\agent_files\\a4\\6fe9989a2c0b421c855af75585b1c130",
+    "artifacts":  [
+                      "input.json",
+                      "git-diff.patch",
+                      "diff-impact.json",
+                      "source-context.md",
+                      "diff-test-cases.md",
+                      "trace-summary.json"
+                  ],
+    "message":  "已生成结构化草稿，并自动补充了源码上下文；待接入真实模型执行引擎。",
+    "lastError":  null,
+    "executionEventCount":  8,
+    "sourceLookupApplied":  true,
+    "createdAt":  "2026-04-06T03:29:17.141301700Z",
+    "updatedAt":  "2026-04-06T03:29:30.986140600Z"
+}

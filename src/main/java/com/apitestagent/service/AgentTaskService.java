@@ -26,6 +26,7 @@ import com.apitestagent.domain.TaskRecord;
 import com.apitestagent.domain.TaskStatus;
 import com.apitestagent.engine.AnalysisEngine;
 import com.apitestagent.engine.AnalysisExecutionResult;
+import com.apitestagent.web.dto.ArtifactContentView;
 import com.apitestagent.web.dto.CreateTaskRequest;
 import com.apitestagent.web.dto.GitDiffQueryRequest;
 import com.apitestagent.web.dto.GitDiffView;
@@ -122,8 +123,8 @@ public class AgentTaskService {
             taskRecord.setMessage(buildCompletionMessage(methodSourceView != null));
             taskRecord.setStatus(TaskStatus.PARTIAL_SUCCESS);
             taskRecord.setUpdatedAt(Instant.now());
-            persistAndTrace(taskRecord, "COMPLETED", TaskStatus.PARTIAL_SUCCESS.name(), taskRecord.getMessage(), simpleDetails("artifacts", taskRecord.getArtifacts()));
             appendArtifact(taskRecord, TRACE_SUMMARY_FILE_NAME);
+            persistAndTrace(taskRecord, "COMPLETED", TaskStatus.PARTIAL_SUCCESS.name(), taskRecord.getMessage(), simpleDetails("artifacts", taskRecord.getArtifacts()));
             tasks.put(taskId, taskRecord);
             return TaskView.from(taskRecord);
         } catch (IOException ex) {
@@ -146,6 +147,40 @@ public class AgentTaskService {
     }
 
     public TaskView getTask(String taskId) {
+        TaskRecord taskRecord = findTaskRecord(taskId);
+        if (taskRecord == null) {
+            throw new NoSuchElementException("任务不存在: " + taskId);
+        }
+        return TaskView.from(taskRecord);
+    }
+
+    public ArtifactContentView getTaskArtifact(String taskId, String artifactName) throws IOException {
+        TaskRecord taskRecord = findTaskRecord(taskId);
+        if (taskRecord == null) {
+            throw new NoSuchElementException("任务不存在: " + taskId);
+        }
+        if (!StringUtils.hasText(artifactName)) {
+            throw new IllegalArgumentException("artifactName 不能为空");
+        }
+        if (!taskRecord.getArtifacts().contains(artifactName)) {
+            throw new NoSuchElementException("任务产物不存在: " + artifactName);
+        }
+
+        Path artifactPath = taskPersistenceService.resolveArtifactPath(taskRecord, artifactName);
+        if (!Files.exists(artifactPath)) {
+            throw new NoSuchElementException("任务产物不存在: " + artifactName);
+        }
+
+        ArtifactContentView artifactContentView = new ArtifactContentView();
+        artifactContentView.setTaskId(taskId);
+        artifactContentView.setArtifactName(artifactName);
+        artifactContentView.setContentType(resolveArtifactContentType(artifactName));
+        artifactContentView.setSize(Files.size(artifactPath));
+        artifactContentView.setContent(new String(Files.readAllBytes(artifactPath), StandardCharsets.UTF_8));
+        return artifactContentView;
+    }
+
+    private TaskRecord findTaskRecord(String taskId) {
         TaskRecord taskRecord = tasks.get(taskId);
         if (taskRecord == null) {
             try {
@@ -154,10 +189,21 @@ public class AgentTaskService {
                 throw new IllegalStateException("读取任务状态失败: " + taskId, ex);
             }
         }
-        if (taskRecord == null) {
-            throw new NoSuchElementException("任务不存在: " + taskId);
+        return taskRecord;
+    }
+
+    private String resolveArtifactContentType(String artifactName) {
+        String lowered = artifactName.toLowerCase();
+        if (lowered.endsWith(".json") || lowered.endsWith(".jsonl")) {
+            return "application/json";
         }
-        return TaskView.from(taskRecord);
+        if (lowered.endsWith(".md")) {
+            return "text/markdown";
+        }
+        if (lowered.endsWith(".patch") || lowered.endsWith(".txt")) {
+            return "text/plain";
+        }
+        return "text/plain";
     }
 
     private void transitionStatus(TaskRecord taskRecord, TaskStatus status, String message) throws IOException {

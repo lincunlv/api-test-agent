@@ -1,0 +1,20 @@
+﻿{
+    "taskId":  "adccbba692974be2a2f9b9bd539aeaa5",
+    "skillCode":  "A5",
+    "skillName":  "API 文档生成",
+    "status":  "PARTIAL_SUCCESS",
+    "prompt":  "请基于 get-git-diff 接口生成接口说明、请求响应字段说明和使用示例",
+    "workspacePath":  "workspace\\agent_files\\a5\\adccbba692974be2a2f9b9bd539aeaa5",
+    "artifacts":  [
+                      "input.json",
+                      "source-context.md",
+                      "api-doc.md",
+                      "trace-summary.json"
+                  ],
+    "message":  "已生成结构化草稿，并自动补充了源码上下文；待接入真实模型执行引擎。",
+    "lastError":  null,
+    "executionEventCount":  8,
+    "sourceLookupApplied":  true,
+    "createdAt":  "2026-04-06T03:44:21.018254100Z",
+    "updatedAt":  "2026-04-06T03:44:27.657056800Z"
+}
