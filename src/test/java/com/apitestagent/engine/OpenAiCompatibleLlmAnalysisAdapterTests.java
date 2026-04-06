@@ -1,26 +1,26 @@
 package com.apitestagent.engine;
 
-import com.apitestagent.config.AnalysisProperties;
-import com.apitestagent.domain.SkillType;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import org.junit.jupiter.api.Test;
-import org.springframework.mock.http.client.MockClientHttpRequest;
-import org.springframework.http.HttpHeaders;
-import org.springframework.http.HttpMethod;
-import org.springframework.http.MediaType;
-import org.springframework.test.web.client.MockRestServiceServer;
-import org.springframework.web.client.RestTemplate;
-
 import java.util.Collections;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import org.junit.jupiter.api.Test;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpMethod;
+import org.springframework.http.MediaType;
+import org.springframework.mock.http.client.MockClientHttpRequest;
+import org.springframework.test.web.client.MockRestServiceServer;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.content;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.header;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.method;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.requestTo;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withSuccess;
+import org.springframework.web.client.RestTemplate;
+
+import com.apitestagent.config.AnalysisProperties;
+import com.apitestagent.domain.SkillType;
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 class OpenAiCompatibleLlmAnalysisAdapterTests {
 
@@ -44,6 +44,67 @@ class OpenAiCompatibleLlmAnalysisAdapterTests {
         String content = adapter.render(sampleRequest());
 
         assertEquals("llm content", content);
+        server.verify();
+    }
+
+    @Test
+    void shouldExtractTextFromMessageContentArray() {
+        AnalysisProperties properties = new AnalysisProperties();
+        properties.setLlmBaseUrl("https://mock-llm.local");
+
+        RestTemplate restTemplate = new RestTemplate();
+        MockRestServiceServer server = MockRestServiceServer.bindTo(restTemplate).build();
+        server.expect(requestTo("https://mock-llm.local"))
+            .andExpect(method(HttpMethod.POST))
+            .andRespond(withSuccess(
+                "{\"choices\":[{\"message\":{\"content\":[{\"type\":\"text\",\"text\":\"segment one\"},{\"type\":\"text\",\"text\":\"segment two\"}]}}]}",
+                MediaType.APPLICATION_JSON
+            ));
+
+        OpenAiCompatibleLlmAnalysisAdapter adapter = new OpenAiCompatibleLlmAnalysisAdapter(restTemplate, properties, new ObjectMapper());
+
+        assertEquals("segment one\nsegment two", adapter.render(sampleRequest()));
+        server.verify();
+    }
+
+    @Test
+    void shouldFallbackToReasoningContentWhenMessageContentMissing() {
+        AnalysisProperties properties = new AnalysisProperties();
+        properties.setLlmBaseUrl("https://mock-llm.local");
+
+        RestTemplate restTemplate = new RestTemplate();
+        MockRestServiceServer server = MockRestServiceServer.bindTo(restTemplate).build();
+        server.expect(requestTo("https://mock-llm.local"))
+            .andExpect(method(HttpMethod.POST))
+            .andRespond(withSuccess(
+                "{\"choices\":[{\"message\":{\"content\":null,\"reasoning_content\":\"fallback reasoning\"}}]}",
+                MediaType.APPLICATION_JSON
+            ));
+
+        OpenAiCompatibleLlmAnalysisAdapter adapter = new OpenAiCompatibleLlmAnalysisAdapter(restTemplate, properties, new ObjectMapper());
+
+        assertEquals("fallback reasoning", adapter.render(sampleRequest()));
+        server.verify();
+    }
+
+    @Test
+    void shouldExposeUpstreamErrorMessage() {
+        AnalysisProperties properties = new AnalysisProperties();
+        properties.setLlmBaseUrl("https://mock-llm.local");
+
+        RestTemplate restTemplate = new RestTemplate();
+        MockRestServiceServer server = MockRestServiceServer.bindTo(restTemplate).build();
+        server.expect(requestTo("https://mock-llm.local"))
+            .andExpect(method(HttpMethod.POST))
+            .andRespond(withSuccess(
+                "{\"error\":{\"message\":\"context length exceeded\"}}",
+                MediaType.APPLICATION_JSON
+            ));
+
+        OpenAiCompatibleLlmAnalysisAdapter adapter = new OpenAiCompatibleLlmAnalysisAdapter(restTemplate, properties, new ObjectMapper());
+
+        IllegalStateException exception = assertThrows(IllegalStateException.class, () -> adapter.render(sampleRequest()));
+        assertTrue(exception.getMessage().contains("context length exceeded"));
         server.verify();
     }
 

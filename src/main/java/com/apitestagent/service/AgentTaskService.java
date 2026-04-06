@@ -42,6 +42,7 @@ public class AgentTaskService {
     private static final String DIFF_IMPACT_FILE_NAME = "diff-impact.json";
     private static final String SOURCE_CONTEXT_FILE_NAME = "source-context.md";
     private static final String TRACE_SUMMARY_FILE_NAME = "trace-summary.json";
+    private static final int MAX_LLM_DIFF_OUTPUT_CHARACTERS = 3000;
 
     private final ConcurrentMap<String, TaskRecord> tasks = new ConcurrentHashMap<>();
 
@@ -354,8 +355,19 @@ public class AgentTaskService {
         payload.put("changedMethods", gitDiffView.getChangedMethods());
         payload.put("relatedInterfaces", gitDiffView.getRelatedInterfaces());
         payload.put("truncated", gitDiffView.getTruncated());
-        payload.put("diffOutput", gitDiffView.getDiffOutput());
+        payload.put("diffOutput", trimDiffOutputForLlm(gitDiffView.getDiffOutput()));
+        payload.put("diffOutputOriginalLength", gitDiffView.getDiffOutput() == null ? 0 : gitDiffView.getDiffOutput().length());
+        payload.put("diffOutputTruncatedForLlm", gitDiffView.getDiffOutput() != null
+            && gitDiffView.getDiffOutput().length() > MAX_LLM_DIFF_OUTPUT_CHARACTERS);
         chainData.put("gitDiff", payload);
+    }
+
+    private String trimDiffOutputForLlm(String diffOutput) {
+        if (!StringUtils.hasText(diffOutput) || diffOutput.length() <= MAX_LLM_DIFF_OUTPUT_CHARACTERS) {
+            return diffOutput;
+        }
+        return diffOutput.substring(0, MAX_LLM_DIFF_OUTPUT_CHARACTERS)
+            + "\n...\n[diff output truncated for llm context]";
     }
 
     private String formatSourceContext(MethodSourceView methodSourceView) {

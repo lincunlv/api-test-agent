@@ -133,6 +133,7 @@ class ApiTestAgentApplicationTests {
         assertTrue(jsonNode.get("changedFiles").toString().contains("OrderService.java"));
         assertTrue(jsonNode.get("changedMethods").toString().contains("createOrder"));
         assertTrue(jsonNode.get("relatedInterfaces").toString().contains("/orders"));
+        assertTrue(jsonNode.get("relatedInterfaces").toString().contains("createOrder"));
         assertTrue(jsonNode.get("diffOutput").asText().contains("updated"));
     }
 

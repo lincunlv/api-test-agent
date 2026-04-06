@@ -49,6 +49,7 @@ public class GitDiffService {
         view.setCached(Boolean.TRUE.equals(effectiveRequest.getCached()));
         view.setChangedFiles(changedFiles);
         applyDiffOutput(view, diffOutput, effectiveRequest.getMaxCharacters());
+        // Keep impact analysis close to raw diff extraction so A4 can consume one structured payload.
         view.setChangedClasses(extractChangedClasses(changedFiles));
         view.setChangedMethods(extractChangedMethods(diffOutput));
         view.setRelatedInterfaces(findRelatedInterfaces(repositoryPath, changedFiles, view.getChangedClasses(), view.getChangedMethods()));
@@ -313,7 +314,7 @@ public class GitDiffService {
 
     private String extractMethodName(String line) {
         String trimmed = line == null ? "" : line.trim();
-        if (!StringUtils.hasText(trimmed) || trimmed.startsWith("@") || !trimmed.contains("(") || trimmed.contains("=")) {
+        if (!StringUtils.hasText(trimmed) || trimmed.startsWith("@") || !trimmed.contains("(")) {
             return null;
         }
         int openParenthesis = trimmed.indexOf('(');

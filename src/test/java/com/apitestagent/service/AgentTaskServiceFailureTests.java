@@ -1,13 +1,5 @@
 package com.apitestagent.service;
 
-import com.apitestagent.config.AgentStorageProperties;
-import com.apitestagent.domain.TaskRecord;
-import com.apitestagent.engine.AnalysisEngine;
-import com.apitestagent.web.dto.CreateTaskRequest;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.io.TempDir;
-
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -20,6 +12,14 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
+
+import com.apitestagent.config.AgentStorageProperties;
+import com.apitestagent.domain.TaskRecord;
+import com.apitestagent.engine.AnalysisEngine;
+import com.apitestagent.web.dto.CreateTaskRequest;
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 class AgentTaskServiceFailureTests {
 
@@ -36,9 +36,10 @@ class AgentTaskServiceFailureTests {
         properties.setWorkspaceBaseDir(workspaceBaseDir.toString());
         properties.setSkillsBaseDir(skillsBaseDir.toString());
 
-        ObjectMapper objectMapper = new ObjectMapper();
+        ObjectMapper objectMapper = new ObjectMapper().findAndRegisterModules();
         SkillService skillService = new SkillService(properties);
         TaskPersistenceService persistenceService = new TaskPersistenceService(objectMapper);
+        GitDiffService gitDiffService = new GitDiffService();
         MethodSourceService methodSourceService = new MethodSourceService();
         AnalysisEngine failingEngine = (requestValue, skillType, skillBundle, taskId) -> {
             throw new IllegalStateException("simulated analysis failure");
@@ -48,6 +49,7 @@ class AgentTaskServiceFailureTests {
             properties,
             skillService,
             failingEngine,
+            gitDiffService,
             methodSourceService,
             persistenceService,
             objectMapper
@@ -89,6 +91,7 @@ class AgentTaskServiceFailureTests {
         Files.write(skillsBaseDir.resolve("references/A1-logic.md"), "a1".getBytes(StandardCharsets.UTF_8));
         Files.write(skillsBaseDir.resolve("references/A2-bug.md"), "a2".getBytes(StandardCharsets.UTF_8));
         Files.write(skillsBaseDir.resolve("references/A3-cases.md"), "a3".getBytes(StandardCharsets.UTF_8));
+        Files.write(skillsBaseDir.resolve("references/A4-diff.md"), "a4".getBytes(StandardCharsets.UTF_8));
         Files.write(skillsBaseDir.resolve("references/A5-doc.md"), "a5".getBytes(StandardCharsets.UTF_8));
     }
 

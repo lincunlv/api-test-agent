@@ -158,13 +158,93 @@ public class OpenAiCompatibleLlmAnalysisAdapter implements LlmAnalysisAdapter {
         }
         try {
             JsonNode root = objectMapper.readTree(responseBody);
-            JsonNode contentNode = root.path("choices").path(0).path("message").path("content");
-            if (!contentNode.isMissingNode() && StringUtils.hasText(contentNode.asText())) {
-                return contentNode.asText();
+            String upstreamError = extractTextValue(root.path("error").path("message"));
+            if (StringUtils.hasText(upstreamError)) {
+                throw new IllegalStateException("LLM upstream error: " + upstreamError);
             }
-            throw new IllegalStateException("LLM response does not contain choices[0].message.content");
+            String content = extractPreferredContent(root);
+            if (StringUtils.hasText(content)) {
+                return content;
+            }
+            throw new IllegalStateException(
+                "LLM response does not contain supported content fields "
+                    + "(choices[0].message.content, choices[0].message.reasoning_content, choices[0].text, output_text)"
+            );
         } catch (JsonProcessingException ex) {
             throw new IllegalStateException("Failed to parse LLM response", ex);
         }
+    }
+
+    private String extractPreferredContent(JsonNode root) {
+        String content = extractTextValue(root.path("choices").path(0).path("message").path("content"));
+        if (StringUtils.hasText(content)) {
+            return content;
+        }
+        content = extractTextValue(root.path("choices").path(0).path("message").path("reasoning_content"));
+        if (StringUtils.hasText(content)) {
+            return content;
+        }
+        content = extractTextValue(root.path("choices").path(0).path("text"));
+        if (StringUtils.hasText(content)) {
+            return content;
+        }
+        content = extractTextValue(root.path("output_text"));
+        if (StringUtils.hasText(content)) {
+            return content;
+        }
+        return extractOutputContent(root.path("output"));
+    }
+
+    private String extractOutputContent(JsonNode outputNode) {
+        if (!outputNode.isArray()) {
+            return null;
+        }
+        StringBuilder builder = new StringBuilder();
+        for (JsonNode item : outputNode) {
+            appendContent(builder, extractTextValue(item.path("content")));
+            appendContent(builder, extractTextValue(item.path("text")));
+        }
+        return builder.length() == 0 ? null : builder.toString();
+    }
+
+    private String extractTextValue(JsonNode node) {
+        if (node == null || node.isMissingNode() || node.isNull()) {
+            return null;
+        }
+        if (node.isTextual()) {
+            return StringUtils.hasText(node.asText()) ? node.asText() : null;
+        }
+        if (node.isArray()) {
+            StringBuilder builder = new StringBuilder();
+            for (JsonNode item : node) {
+                appendContent(builder, extractTextValue(item));
+            }
+            return builder.length() == 0 ? null : builder.toString();
+        }
+        if (node.isObject()) {
+            String directText = extractTextValue(node.path("text"));
+            if (StringUtils.hasText(directText)) {
+                return directText;
+            }
+            String directContent = extractTextValue(node.path("content"));
+            if (StringUtils.hasText(directContent)) {
+                return directContent;
+            }
+            String value = extractTextValue(node.path("value"));
+            if (StringUtils.hasText(value)) {
+                return value;
+            }
+        }
+        return null;
+    }
+
+    private void appendContent(StringBuilder builder, String content) {
+        if (!StringUtils.hasText(content)) {
+            return;
+        }
+        if (builder.length() > 0) {
+            builder.append('\n');
+        }
+        builder.append(content);
     }
 }
