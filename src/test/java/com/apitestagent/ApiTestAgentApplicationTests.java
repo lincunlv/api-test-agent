@@ -323,6 +323,67 @@ class ApiTestAgentApplicationTests {
     }
 
     @Test
+    void shouldCreateA4TaskWithGitDiffOnlyContext() throws Exception {
+        Path repositoryPath = createTempJavaApiRepository();
+        Files.write(repositoryPath.resolve(Paths.get("src", "main", "java", "com", "example", "service", "OrderService.java")),
+            Arrays.asList(
+                "package com.example.service;",
+                "",
+                "public class OrderService {",
+                "    public String createOrder(String request) {",
+                "        return \"updated-by-diff-only\";",
+                "    }",
+                "}"),
+            StandardCharsets.UTF_8);
+
+        Map<String, Object> repository = new LinkedHashMap<>();
+        repository.put("name", "temp-repo");
+        repository.put("branch", "HEAD");
+
+        Map<String, Object> chainData = new LinkedHashMap<>();
+        chainData.put("repository", repository);
+
+        Map<String, Object> gitDiffQuery = new LinkedHashMap<>();
+        gitDiffQuery.put("repositoryPath", repositoryPath.toString());
+
+        Map<String, Object> options = new LinkedHashMap<>();
+        options.put("rendererMode", "mock-model");
+        options.put("mockOutput", "# diff-only\n\nmock diff-only output");
+        options.put("gitDiffQuery", gitDiffQuery);
+
+        Map<String, Object> request = new LinkedHashMap<>();
+        request.put("taskType", "A4");
+        request.put("prompt", "请基于当前代码 diff 生成增量回归方案");
+        request.put("chainData", chainData);
+        request.put("options", options);
+        String requestJson = objectMapper.writeValueAsString(request);
+
+        String response = mockMvc.perform(post("/api/agent/tasks")
+                .contentType("application/json")
+            .content(Objects.requireNonNull(requestJson)))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.skillCode").value("A4"))
+            .andReturn()
+            .getResponse()
+            .getContentAsString();
+
+        JsonNode jsonNode = objectMapper.readTree(response);
+        Path workspacePath = Paths.get(jsonNode.get("workspacePath").asText());
+        String artifactContent = new String(Files.readAllBytes(workspacePath.resolve("diff-test-cases.md")), StandardCharsets.UTF_8);
+        String diffImpactContent = new String(Files.readAllBytes(workspacePath.resolve("diff-impact.json")), StandardCharsets.UTF_8);
+        String inputContent = new String(Files.readAllBytes(workspacePath.resolve("input.json")), StandardCharsets.UTF_8);
+
+        assertTrue(artifactContent.contains("mock diff-only output"));
+        assertTrue(diffImpactContent.contains("/orders"));
+        assertTrue(diffImpactContent.contains("createOrder"));
+        assertTrue(diffImpactContent.contains("scenarioCandidates"));
+        assertTrue(inputContent.contains("\"repository\""));
+        assertTrue(inputContent.contains("\"gitDiffQuery\""));
+        assertFalse(inputContent.contains("\"interface\""));
+        assertFalse(inputContent.contains("\"entry\""));
+    }
+
+    @Test
     void shouldReturnValidationErrorWhenTaskTypeMissing() throws Exception {
         String requestBody = "{"
             + "\"prompt\":\"缺少任务类型\"," 

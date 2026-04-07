@@ -28,6 +28,16 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 @Component
 public class OpenAiCompatibleLlmAnalysisAdapter implements LlmAnalysisAdapter {
 
+    private static final String MESSAGE_FIELD = "message";
+
+    private static final String CONTENT_FIELD = "content";
+
+    private static final String CHOICES_FIELD = "choices";
+
+    private static final String TEXT_FIELD = "text";
+
+    private static final String VALUE_FIELD = "value";
+
     private final RestTemplate restTemplate;
 
     private final AnalysisProperties properties;
@@ -119,13 +129,13 @@ public class OpenAiCompatibleLlmAnalysisAdapter implements LlmAnalysisAdapter {
     private Map<String, String> message(String role, String content) {
         Map<String, String> message = new LinkedHashMap<>();
         message.put("role", role);
-        message.put("content", content);
+        message.put(CONTENT_FIELD, content);
         return message;
     }
 
     private String buildSystemPrompt(LlmRenderRequest request) {
         StringBuilder builder = new StringBuilder();
-        builder.append("You are an interface testing analysis agent. ");
+        builder.append("You are a code-diff and interface-chain testing analysis agent. ");
         builder.append("Follow the provided skill index and reference strictly.\n\n");
         builder.append("[SKILL INDEX]\n").append(request.getSkillIndexContent()).append("\n\n");
         builder.append("[REFERENCE]\n").append(request.getReferenceContent());
@@ -158,7 +168,7 @@ public class OpenAiCompatibleLlmAnalysisAdapter implements LlmAnalysisAdapter {
         }
         try {
             JsonNode root = objectMapper.readTree(responseBody);
-            String upstreamError = extractTextValue(root.path("error").path("message"));
+            String upstreamError = extractTextValue(root.path("error").path(MESSAGE_FIELD));
             if (StringUtils.hasText(upstreamError)) {
                 throw new IllegalStateException("LLM upstream error: " + upstreamError);
             }
@@ -176,15 +186,15 @@ public class OpenAiCompatibleLlmAnalysisAdapter implements LlmAnalysisAdapter {
     }
 
     private String extractPreferredContent(JsonNode root) {
-        String content = extractTextValue(root.path("choices").path(0).path("message").path("content"));
+        String content = extractTextValue(root.path(CHOICES_FIELD).path(0).path(MESSAGE_FIELD).path(CONTENT_FIELD));
         if (StringUtils.hasText(content)) {
             return content;
         }
-        content = extractTextValue(root.path("choices").path(0).path("message").path("reasoning_content"));
+        content = extractTextValue(root.path(CHOICES_FIELD).path(0).path(MESSAGE_FIELD).path("reasoning_content"));
         if (StringUtils.hasText(content)) {
             return content;
         }
-        content = extractTextValue(root.path("choices").path(0).path("text"));
+        content = extractTextValue(root.path(CHOICES_FIELD).path(0).path(TEXT_FIELD));
         if (StringUtils.hasText(content)) {
             return content;
         }
@@ -201,8 +211,8 @@ public class OpenAiCompatibleLlmAnalysisAdapter implements LlmAnalysisAdapter {
         }
         StringBuilder builder = new StringBuilder();
         for (JsonNode item : outputNode) {
-            appendContent(builder, extractTextValue(item.path("content")));
-            appendContent(builder, extractTextValue(item.path("text")));
+            appendContent(builder, extractTextValue(item.path(CONTENT_FIELD)));
+            appendContent(builder, extractTextValue(item.path(TEXT_FIELD)));
         }
         return builder.length() == 0 ? null : builder.toString();
     }
@@ -215,22 +225,28 @@ public class OpenAiCompatibleLlmAnalysisAdapter implements LlmAnalysisAdapter {
             return StringUtils.hasText(node.asText()) ? node.asText() : null;
         }
         if (node.isArray()) {
-            StringBuilder builder = new StringBuilder();
-            for (JsonNode item : node) {
-                appendContent(builder, extractTextValue(item));
-            }
-            return builder.length() == 0 ? null : builder.toString();
+            return collectArrayText(node);
         }
         if (node.isObject()) {
-            String directText = extractTextValue(node.path("text"));
-            if (StringUtils.hasText(directText)) {
-                return directText;
-            }
-            String directContent = extractTextValue(node.path("content"));
-            if (StringUtils.hasText(directContent)) {
-                return directContent;
-            }
-            String value = extractTextValue(node.path("value"));
+            return firstNonBlank(
+                extractTextValue(node.path(TEXT_FIELD)),
+                extractTextValue(node.path(CONTENT_FIELD)),
+                extractTextValue(node.path(VALUE_FIELD))
+            );
+        }
+        return null;
+    }
+
+    private String collectArrayText(JsonNode node) {
+        StringBuilder builder = new StringBuilder();
+        for (JsonNode item : node) {
+            appendContent(builder, extractTextValue(item));
+        }
+        return builder.length() == 0 ? null : builder.toString();
+    }
+
+    private String firstNonBlank(String... values) {
+        for (String value : values) {
             if (StringUtils.hasText(value)) {
                 return value;
             }

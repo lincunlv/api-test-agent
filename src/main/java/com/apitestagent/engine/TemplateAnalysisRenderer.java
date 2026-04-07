@@ -1,5 +1,6 @@
 package com.apitestagent.engine;
 
+import java.util.Collection;
 import java.util.Map;
 
 import org.springframework.stereotype.Component;
@@ -12,6 +13,7 @@ import com.apitestagent.web.dto.CreateTaskRequest;
 public class TemplateAnalysisRenderer implements AnalysisRenderer {
 
     private static final String INTERFACE_KEY = "interface";
+    private static final String GIT_DIFF_KEY = "gitDiff";
     private static final String TABLE_SEPARATOR = "| --- | --- | --- | --- | --- | --- | --- |\n";
     private static final String DIFF_SCENARIO_TABLE_SEPARATOR = "| --- | --- | --- | --- | --- | --- | --- | --- | --- |\n";
     private static final String DIFF_SCRIPT_TABLE_SEPARATOR = "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |\n";
@@ -21,6 +23,9 @@ public class TemplateAnalysisRenderer implements AnalysisRenderer {
         String interfaceName = valueFrom(request.getChainData(), INTERFACE_KEY, "name", "未提供接口名称");
         String interfacePath = valueFrom(request.getChainData(), INTERFACE_KEY, "path", "未提供接口路径");
         String interfaceMethod = valueFrom(request.getChainData(), INTERFACE_KEY, "method", "未提供请求方法");
+        String changedFiles = countFrom(request.getChainData(), GIT_DIFF_KEY, "changedFiles");
+        String relatedInterfaces = countFrom(request.getChainData(), GIT_DIFF_KEY, "relatedInterfaces");
+        String scenarioCandidates = countFrom(request.getChainData(), GIT_DIFF_KEY, "scenarioCandidates");
 
         StringBuilder builder = new StringBuilder();
         builder.append("# ").append(skillType.getDisplayName()).append("\n\n");
@@ -31,7 +36,10 @@ public class TemplateAnalysisRenderer implements AnalysisRenderer {
         builder.append("- 用户请求: ").append(request.getPrompt()).append("\n");
         builder.append("- 接口名称: ").append(interfaceName).append("\n");
         builder.append("- 接口路径: ").append(interfacePath).append("\n");
-        builder.append("- 请求方法: ").append(interfaceMethod).append("\n\n");
+        builder.append("- 请求方法: ").append(interfaceMethod).append("\n");
+        builder.append("- diff changedFiles: ").append(changedFiles).append("\n");
+        builder.append("- diff relatedInterfaces: ").append(relatedInterfaces).append("\n");
+        builder.append("- diff scenarioCandidates: ").append(scenarioCandidates).append("\n\n");
 
         switch (skillType) {
             case A1:
@@ -106,5 +114,21 @@ public class TemplateAnalysisRenderer implements AnalysisRenderer {
         }
         Object second = ((Map<String, Object>) first).get(secondKey);
         return second == null ? fallback : String.valueOf(second);
+    }
+
+    @SuppressWarnings("unchecked")
+    private String countFrom(Map<String, Object> root, String firstKey, String secondKey) {
+        if (root == null) {
+            return "0";
+        }
+        Object first = root.get(firstKey);
+        if (!(first instanceof Map)) {
+            return "0";
+        }
+        Object second = ((Map<String, Object>) first).get(secondKey);
+        if (second instanceof Collection) {
+            return String.valueOf(((Collection<?>) second).size());
+        }
+        return second == null ? "0" : "1";
     }
 }
