@@ -6,7 +6,7 @@ public enum SkillType {
     A1("A1", "业务逻辑梳理", "A1-logic.md", "logic-analysis.md"),
     A2("A2", "Bug 风险分析", "A2-bug.md", "risk-analysis.md"),
     A3("A3", "测试用例生成", "A3-cases.md", "test-cases.md"),
-    A4("A4", "Diff 关联接口用例生成", "A4-diff.md", "diff-test-cases.md"),
+    A4("A4", "Diff 场景级测试脚本生成", "A4-diff.md", "diff-test-cases.md"),
     A5("A5", "API 文档生成", "A5-doc.md", "api-doc.md");
 
     private final String code;
@@ -53,7 +53,8 @@ public enum SkillType {
             return A3;
         }
         if ("a4".equals(normalized) || normalized.contains("diff") || normalized.contains("变更")
-            || normalized.contains("增量") || normalized.contains("回归")) {
+            || normalized.contains("增量") || normalized.contains("回归") || normalized.contains("脚本")
+            || normalized.contains("场景")) {
             return A4;
         }
         if ("a5".equals(normalized) || normalized.contains("doc") || normalized.contains("文档") || normalized.contains("api")) {

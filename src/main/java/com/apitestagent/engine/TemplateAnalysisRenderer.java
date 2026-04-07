@@ -13,7 +13,8 @@ public class TemplateAnalysisRenderer implements AnalysisRenderer {
 
     private static final String INTERFACE_KEY = "interface";
     private static final String TABLE_SEPARATOR = "| --- | --- | --- | --- | --- | --- | --- |\n";
-    private static final String DIFF_TABLE_SEPARATOR = "| --- | --- | --- | --- | --- | --- | --- | --- |\n";
+    private static final String DIFF_SCENARIO_TABLE_SEPARATOR = "| --- | --- | --- | --- | --- | --- | --- | --- | --- |\n";
+    private static final String DIFF_SCRIPT_TABLE_SEPARATOR = "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |\n";
 
     @Override
     public String render(CreateTaskRequest request, SkillType skillType, SkillBundle skillBundle, String taskId) {
@@ -57,13 +58,22 @@ public class TemplateAnalysisRenderer implements AnalysisRenderer {
                 break;
             case A4:
                 builder.append("## 变更摘要\n\n待补充\n\n");
+                builder.append("## 测试脚本生成判断\n\n待补充\n\n");
                 builder.append("## 关联接口识别\n\n待补充\n\n");
-                builder.append("## 增量测试用例\n\n");
-                builder.append("| 用例编号 | 关联接口 | 变更点 | 触发原因 | 用例标题 | 优先级 | 测试步骤 | 预期结果 |\n");
-                builder.append(DIFF_TABLE_SEPARATOR);
-                builder.append("| DTC-001 | 待补充 | 待补充 | 待补充 | 待模型分析补充 | P1 | 待补充 | 待补充 |\n\n");
-                builder.append("## 回归建议\n\n- 必回归：待补充\n- 建议回归：待补充\n- 暂不回归：待补充\n\n");
-                builder.append("## 待确认项\n\n- git diff 影响范围和接口映射待补充\n\n");
+                builder.append("## 受影响场景识别\n\n");
+                builder.append("| 场景编号 | 场景名称 | 场景类型 | 入口接口 | 关联接口链 | 共享业务对象/状态提示 | 触发条件 | 场景依据 | 建议优先级 |\n");
+                builder.append(DIFF_SCENARIO_TABLE_SEPARATOR);
+                builder.append("| SCN-001 | 待补充 | 主流程/状态流转 | 待补充 | 待补充 | 业务对象/状态待补充 | 待补充 | 待模型分析补充 | P1 |\n\n");
+                builder.append("## 增量测试脚本\n\n");
+                builder.append("| 脚本编号 | 脚本分类 | 关联场景 | 关联接口 | 变更点 | 触发原因 | 优先级 | 请求数据/输入 | 执行步骤/脚本骨架 | 断言 | 核心观测点 |\n");
+                builder.append(DIFF_SCRIPT_TABLE_SEPARATOR);
+                builder.append("| DTS-001 | 直接受影响场景 | SCN-001 | 待补充 | 待补充 | 待补充 | P1 | 待补充 | 待模型分析补充 | 待补充 | 返回字段/状态码/状态流转 |\n\n");
+                builder.append("## 回归补充脚本\n\n");
+                builder.append("| 脚本编号 | 回归级别 | 回归对象 | 关联场景 | 建议补充脚本 | 原因 |\n");
+                builder.append("| --- | --- | --- | --- | --- | --- |\n");
+                builder.append("| RTS-001 | 必回归 | 待补充 | SCN-001 | 待补充 | 待补充 |\n\n");
+                builder.append("## 执行顺序建议\n\n- 1. 先执行直接受影响场景脚本\n- 2. 再执行高风险关联场景回归脚本\n- 3. 最后执行低风险补充验证脚本\n\n");
+                builder.append("## 待确认项\n\n- git diff 影响范围、接口映射和完整场景链待补充\n\n");
                 break;
             case A5:
                 builder.append("## 接口概述\n\n待补充\n\n");

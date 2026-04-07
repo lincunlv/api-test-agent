@@ -135,6 +135,16 @@ class ApiTestAgentApplicationTests {
         assertTrue(jsonNode.get("changedMethods").toString().contains("createOrder"));
         assertTrue(jsonNode.get("relatedInterfaces").toString().contains("/orders"));
         assertTrue(jsonNode.get("relatedInterfaces").toString().contains("createOrder"));
+        assertTrue(jsonNode.get("scenarioCandidates").toString().contains("SCN-001"));
+        assertTrue(jsonNode.get("scenarioCandidates").toString().contains("POST /orders"));
+        assertTrue(jsonNode.get("scenarioCandidates").toString().contains("GET /orders/{id}"));
+        assertTrue(jsonNode.get("scenarioCandidates").toString().contains("orders"));
+        assertTrue(jsonNode.get("scenarioCandidates").toString().contains("id"));
+        assertTrue(jsonNode.get("scenarioCandidates").toString().contains("使用创建接口返回的 id 驱动后续查询或校验"));
+        assertTrue(jsonNode.get("scenarioCandidates").toString().contains("response.id"));
+        assertTrue(jsonNode.get("scenarioCandidates").toString().contains("GET /orders/{id} -> path.id"));
+        assertTrue(jsonNode.get("scenarioCandidates").toString().contains("response.id -> GET /orders/{id} -> path.id"));
+        assertTrue(jsonNode.get("scenarioCandidates").toString().contains("创建后查询状态"));
         assertTrue(jsonNode.get("diffOutput").asText().contains("updated"));
     }
 
@@ -171,7 +181,7 @@ class ApiTestAgentApplicationTests {
 
         JsonNode jsonNode = objectMapper.readTree(response);
         assertEquals(repositoryPath.toAbsolutePath().normalize().toString(), jsonNode.get("repositoryPath").asText());
-        assertTrue(jsonNode.get("currentBranch").asText().length() > 0);
+        assertFalse(jsonNode.get("currentBranch").asText().isEmpty());
         assertTrue(jsonNode.get("refs").isArray());
         assertTrue(jsonNode.get("refs").size() >= 1);
         assertTrue(jsonNode.get("commits").isArray());
@@ -185,7 +195,7 @@ class ApiTestAgentApplicationTests {
         request.put("maxCount", 10);
         String searchResponse = mockMvc.perform(post("/api/agent/tools/get-git-history")
                 .contentType("application/json")
-                .content(objectMapper.writeValueAsString(request)))
+            .content(Objects.requireNonNull(objectMapper.writeValueAsString(request))))
             .andExpect(status().isOk())
             .andReturn()
             .getResponse()
@@ -303,6 +313,11 @@ class ApiTestAgentApplicationTests {
         assertTrue(gitDiffContent.contains("updated"));
         assertTrue(diffImpactContent.contains("/orders"));
         assertTrue(diffImpactContent.contains("createOrder"));
+        assertTrue(diffImpactContent.contains("scenarioCandidates"));
+        assertTrue(diffImpactContent.contains("GET /orders/{id}"));
+        assertTrue(diffImpactContent.contains("使用创建接口返回的 id 驱动后续查询或校验"));
+        assertTrue(diffImpactContent.contains("response.id -> GET /orders/{id} -> path.id"));
+        assertTrue(diffImpactContent.contains("创建后查询状态"));
         assertTrue(jsonNode.get("artifacts").toString().contains("git-diff.patch"));
         assertTrue(jsonNode.get("artifacts").toString().contains("diff-impact.json"));
     }
@@ -409,6 +424,8 @@ class ApiTestAgentApplicationTests {
             Arrays.asList(
                 "package com.example.web;",
                 "",
+                "import org.springframework.web.bind.annotation.GetMapping;",
+                "import org.springframework.web.bind.annotation.PathVariable;",
                 "import org.springframework.web.bind.annotation.PostMapping;",
                 "import org.springframework.web.bind.annotation.RequestBody;",
                 "import org.springframework.web.bind.annotation.RequestMapping;",
@@ -425,6 +442,11 @@ class ApiTestAgentApplicationTests {
                 "    public String createOrder(@RequestBody String request) {",
                 "        return orderService.createOrder(request);",
                 "    }",
+                "",
+                "    @GetMapping(\"/{id}\")",
+                "    public String getOrder(@PathVariable String id) {",
+                "        return orderService.getOrder(id);",
+                "    }",
                 "}"),
             StandardCharsets.UTF_8);
 
@@ -435,6 +457,10 @@ class ApiTestAgentApplicationTests {
                 "public class OrderService {",
                 "    public String createOrder(String request) {",
                 "        return \"created\";",
+                "    }",
+                "",
+                "    public String getOrder(String id) {",
+                "        return \"status:\" + id;",
                 "    }",
                 "}"),
             StandardCharsets.UTF_8);

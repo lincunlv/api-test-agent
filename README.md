@@ -15,7 +15,7 @@
 6. 提供增强版 `get-method-source` API，可按类名、方法名、包名、参数个数定位本地 Java 源码片段。
 7. 提供 `get-git-diff` API，可按仓库路径、diffRange 和路径范围获取代码变更。
 8. 任务执行时可根据链路 `entry` 或 `options.methodSourceQuery` 自动补充源码上下文。
-9. A4 Diff 关联接口用例生成任务支持通过 `options.gitDiffQuery` 自动采集 git diff，并落盘为 `git-diff.patch`。
+9. A4 Diff 接口测试脚本生成任务支持通过 `options.gitDiffQuery` 自动采集 git diff，并落盘为 `git-diff.patch`。
 10. 分析引擎已接入统一中间件管道，当前包含 Guardrail、ContextEditing、Observability、Retry、ErrorBoundary 五类处理。
 11. 已预留可配置 renderer 接缝，可通过 `agent.analysis.renderer-mode` 或请求 `options.rendererMode` 切换到后续模型适配实现。
 12. 已预留 `llm` 渲染模式和 `LlmAnalysisAdapter` 适配器接口，可在不改任务主流程的前提下接入真实模型。

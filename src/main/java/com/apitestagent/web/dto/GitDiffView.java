@@ -21,6 +21,8 @@ public class GitDiffView {
 
     private List<RelatedInterfaceView> relatedInterfaces = new ArrayList<>();
 
+    private List<ScenarioCandidateView> scenarioCandidates = new ArrayList<>();
+
     private String diffOutput;
 
     public String getRepositoryPath() {
@@ -85,6 +87,14 @@ public class GitDiffView {
 
     public void setRelatedInterfaces(List<RelatedInterfaceView> relatedInterfaces) {
         this.relatedInterfaces = relatedInterfaces;
+    }
+
+    public List<ScenarioCandidateView> getScenarioCandidates() {
+        return scenarioCandidates;
+    }
+
+    public void setScenarioCandidates(List<ScenarioCandidateView> scenarioCandidates) {
+        this.scenarioCandidates = scenarioCandidates;
     }
 
     public String getDiffOutput() {

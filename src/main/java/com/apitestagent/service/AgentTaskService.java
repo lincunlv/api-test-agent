@@ -229,6 +229,7 @@ public class AgentTaskService {
         Map<String, Object> details = new LinkedHashMap<>();
         details.put("changedFiles", gitDiffView.getChangedFiles());
         details.put("relatedInterfaces", gitDiffView.getRelatedInterfaces().size());
+        details.put("scenarioCandidates", gitDiffView.getScenarioCandidates().size());
         details.put("truncated", gitDiffView.getTruncated());
         persistAndTrace(taskRecord, "GIT_DIFF_COLLECTED", TaskStatus.RUNNING.name(), "已采集 git diff 代码变更", details);
         return gitDiffView;
@@ -400,6 +401,7 @@ public class AgentTaskService {
         payload.put("changedClasses", gitDiffView.getChangedClasses());
         payload.put("changedMethods", gitDiffView.getChangedMethods());
         payload.put("relatedInterfaces", gitDiffView.getRelatedInterfaces());
+        payload.put("scenarioCandidates", gitDiffView.getScenarioCandidates());
         payload.put("truncated", gitDiffView.getTruncated());
         payload.put("diffOutput", trimDiffOutputForLlm(gitDiffView.getDiffOutput()));
         payload.put("diffOutputOriginalLength", gitDiffView.getDiffOutput() == null ? 0 : gitDiffView.getDiffOutput().length());
@@ -434,6 +436,7 @@ public class AgentTaskService {
         builder.append("- changedClasses: ").append(gitDiffView.getChangedClasses()).append("\n");
         builder.append("- changedMethods: ").append(gitDiffView.getChangedMethods()).append("\n");
         builder.append("- relatedInterfaces: ").append(gitDiffView.getRelatedInterfaces().size()).append("\n");
+        builder.append("- scenarioCandidates: ").append(gitDiffView.getScenarioCandidates().size()).append("\n");
         builder.append("- truncated: ").append(gitDiffView.getTruncated()).append("\n\n");
         if (!gitDiffView.getRelatedInterfaces().isEmpty()) {
             builder.append("### 关联接口\n\n");
@@ -444,6 +447,25 @@ public class AgentTaskService {
                     .append(relatedInterface.getControllerClass()).append("#")
                     .append(relatedInterface.getHandlerMethod()).append("，依据: ")
                     .append(relatedInterface.getEvidence()).append("\n");
+            }
+            builder.append("\n");
+        }
+        if (!gitDiffView.getScenarioCandidates().isEmpty()) {
+            builder.append("### 场景候选\n\n");
+            for (com.apitestagent.web.dto.ScenarioCandidateView scenarioCandidate : gitDiffView.getScenarioCandidates()) {
+                builder.append("- [").append(scenarioCandidate.getPriority()).append("] ")
+                    .append(scenarioCandidate.getScenarioId()).append(" ")
+                    .append(scenarioCandidate.getScenarioName()).append(" -> ")
+                    .append(scenarioCandidate.getRelatedInterfaceChain()).append("，业务对象: ")
+                    .append(scenarioCandidate.getBusinessObject()).append("，共享主键: ")
+                    .append(scenarioCandidate.getSharedKeyHints()).append("，数据传递: ")
+                    .append(scenarioCandidate.getDataFlowHint()).append("，状态提示: ")
+                        .append(scenarioCandidate.getStateTransitionHint()).append("，字段传递: ")
+                        .append(scenarioCandidate.getFieldTransferHints()).append("，请求绑定: ")
+                        .append(scenarioCandidate.getRequestBindingHints()).append("，响应字段: ")
+                        .append(scenarioCandidate.getResponseFieldHints()).append("，依赖提示: ")
+                    .append(scenarioCandidate.getDependencyHints()).append("，触发条件: ")
+                    .append(scenarioCandidate.getTriggerCondition()).append("\n");
             }
             builder.append("\n");
         }

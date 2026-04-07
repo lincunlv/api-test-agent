@@ -29,6 +29,7 @@ import com.apitestagent.web.dto.GitHistoryQueryRequest;
 import com.apitestagent.web.dto.GitHistoryView;
 import com.apitestagent.web.dto.GitReferenceView;
 import com.apitestagent.web.dto.RelatedInterfaceView;
+import com.apitestagent.web.dto.ScenarioCandidateView;
 
 @Service
 public class GitDiffService {
@@ -40,6 +41,16 @@ public class GitDiffService {
     private static final Pattern REQUEST_METHOD_PATTERN = Pattern.compile("RequestMethod\\.(GET|POST|PUT|DELETE|PATCH)");
     private static final String FIELD_SEPARATOR = "\u001F";
     private static final String LINE_SPLIT_REGEX = "\\r?\\n";
+    private static final String HTTP_PATCH = "PATCH";
+    private static final String HTTP_DELETE = "DELETE";
+    private static final String RELATION_DIRECT = "DIRECT";
+    private static final String CONTROLLER_SUFFIX = "Controller";
+    private static final String DEP_REPOSITORY = "数据库/Repository";
+    private static final String DEP_CACHE = "缓存/Redis";
+    private static final String DEP_HTTP = "外部HTTP调用";
+    private static final String DEP_MESSAGE = "消息/异步事件";
+    private static final Pattern PATH_VARIABLE_PATTERN = Pattern.compile("\\{([^/}]+)\\}");
+    private static final Pattern ID_TOKEN_PATTERN = Pattern.compile("\\b([A-Za-z][A-Za-z0-9]*Id)\\b");
 
     public GitHistoryView getGitHistory(GitHistoryQueryRequest request) throws IOException {
         GitHistoryQueryRequest effectiveRequest = request == null ? new GitHistoryQueryRequest() : request;
@@ -82,6 +93,7 @@ public class GitDiffService {
         view.setChangedClasses(extractChangedClasses(changedFiles));
         view.setChangedMethods(extractChangedMethods(diffOutput));
         view.setRelatedInterfaces(findRelatedInterfaces(repositoryPath, changedFiles, view.getChangedClasses(), view.getChangedMethods()));
+        view.setScenarioCandidates(findScenarioCandidates(repositoryPath, changedFiles, view.getChangedClasses(), view.getChangedMethods()));
         return view;
     }
 
@@ -183,6 +195,51 @@ public class GitDiffService {
         return result;
     }
 
+    private List<ScenarioCandidateView> findScenarioCandidates(Path repositoryPath,
+                                                               List<String> changedFiles,
+                                                               List<String> changedClasses,
+                                                               List<String> changedMethods) throws IOException {
+        Path javaRoot = repositoryPath.resolve(Paths.get("src", "main", "java"));
+        if (!Files.exists(javaRoot)) {
+            return Collections.emptyList();
+        }
+        List<Path> controllerFiles = collectControllerFiles(javaRoot);
+        List<ScenarioCandidateView> result = new ArrayList<>();
+        Set<String> dedupe = new LinkedHashSet<>();
+        int index = 1;
+        for (Path controllerFile : controllerFiles) {
+            ControllerDescriptor descriptor = parseController(repositoryPath, controllerFile);
+            if (descriptor != null && !descriptor.mappings.isEmpty()) {
+                String relationType = resolveRelationType(descriptor, changedFiles, changedClasses, changedMethods);
+                if (StringUtils.hasText(relationType)) {
+                    List<ControllerMapping> orderedMappings = orderMappings(descriptor.mappings);
+                    String dedupeKey = descriptor.controllerClass + "|" + buildChainKey(orderedMappings);
+                    if (dedupe.add(dedupeKey)) {
+                        ScenarioCandidateView candidate = new ScenarioCandidateView();
+                        candidate.setScenarioId(String.format(Locale.ROOT, "SCN-%03d", index++));
+                        candidate.setScenarioType(resolveScenarioType(orderedMappings, relationType));
+                        candidate.setScenarioName(buildScenarioName(descriptor, orderedMappings, candidate.getScenarioType()));
+                        candidate.setEntryInterface(formatMapping(selectEntryMapping(orderedMappings)));
+                        candidate.setRelatedInterfaceChain(toInterfaceChain(orderedMappings));
+                        candidate.setTriggerCondition(buildTriggerCondition(changedClasses, changedMethods, orderedMappings));
+                        candidate.setBusinessObject(inferBusinessObject(descriptor, orderedMappings));
+                        candidate.setSharedKeyHints(inferSharedKeyHints(descriptor, orderedMappings));
+                        candidate.setResponseFieldHints(inferResponseFieldHints(orderedMappings, candidate.getSharedKeyHints()));
+                        candidate.setRequestBindingHints(inferRequestBindingHints(orderedMappings, candidate.getSharedKeyHints()));
+                        candidate.setFieldTransferHints(inferFieldTransferHints(candidate.getResponseFieldHints(), candidate.getRequestBindingHints()));
+                        candidate.setDataFlowHint(inferDataFlowHint(orderedMappings, candidate.getSharedKeyHints()));
+                        candidate.setStateTransitionHint(inferStateTransitionHint(orderedMappings));
+                        candidate.setDependencyHints(inferDependencyHints(descriptor));
+                        candidate.setEvidence(buildScenarioEvidence(descriptor, changedFiles, changedClasses, changedMethods, orderedMappings));
+                        candidate.setPriority(resolveScenarioPriority(relationType, orderedMappings));
+                        result.add(candidate);
+                    }
+                }
+            }
+        }
+        return result;
+    }
+
     private void addRelatedMappings(List<RelatedInterfaceView> result,
                                     Set<String> dedupe,
                                     ControllerDescriptor descriptor,
@@ -202,6 +259,387 @@ public class GitDiffService {
                 result.add(view);
             }
         }
+    }
+
+    private List<ControllerMapping> orderMappings(List<ControllerMapping> mappings) {
+        List<ControllerMapping> ordered = new ArrayList<>(mappings);
+        Collections.sort(ordered, (left, right) -> {
+            int scoreCompare = Integer.compare(mappingOrderScore(left), mappingOrderScore(right));
+            if (scoreCompare != 0) {
+                return scoreCompare;
+            }
+            return formatMapping(left).compareTo(formatMapping(right));
+        });
+        return ordered;
+    }
+
+    private int mappingOrderScore(ControllerMapping mapping) {
+        if (mapping == null || !StringUtils.hasText(mapping.httpMethod)) {
+            return 99;
+        }
+        String method = mapping.httpMethod.toUpperCase(Locale.ROOT);
+        if ("POST".equals(method)) {
+            return 1;
+        }
+        if ("PUT".equals(method) || HTTP_PATCH.equals(method)) {
+            return 2;
+        }
+        if ("GET".equals(method)) {
+            return 3;
+        }
+        if (HTTP_DELETE.equals(method)) {
+            return 4;
+        }
+        return 9;
+    }
+
+    private String buildChainKey(List<ControllerMapping> mappings) {
+        StringBuilder builder = new StringBuilder();
+        for (ControllerMapping mapping : mappings) {
+            if (builder.length() > 0) {
+                builder.append(" -> ");
+            }
+            builder.append(formatMapping(mapping));
+        }
+        return builder.toString();
+    }
+
+    private String resolveScenarioType(List<ControllerMapping> mappings, String relationType) {
+        boolean hasRead = hasMethod(mappings, "GET");
+        boolean hasCreate = hasMethod(mappings, "POST");
+        boolean hasUpdate = hasMethod(mappings, "PUT") || hasMethod(mappings, HTTP_PATCH);
+        boolean hasDelete = hasMethod(mappings, HTTP_DELETE);
+        if (hasCreate && hasRead) {
+            return "主流程/状态流转";
+        }
+        if ((hasUpdate || hasDelete) && hasRead) {
+            return "状态流转/逆向流程";
+        }
+        if (mappings.size() > 1) {
+            return "多接口回归链";
+        }
+        if (RELATION_DIRECT.equalsIgnoreCase(relationType)) {
+            return "直接变更场景";
+        }
+        return "关联回归场景";
+    }
+
+    private boolean hasMethod(List<ControllerMapping> mappings, String httpMethod) {
+        for (ControllerMapping mapping : mappings) {
+            if (mapping != null && httpMethod.equalsIgnoreCase(mapping.httpMethod)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private String buildScenarioName(ControllerDescriptor descriptor,
+                                     List<ControllerMapping> mappings,
+                                     String scenarioType) {
+        String base = descriptor.controllerClass;
+        if (StringUtils.hasText(base) && base.endsWith(CONTROLLER_SUFFIX)) {
+            base = base.substring(0, base.length() - CONTROLLER_SUFFIX.length());
+        }
+        if (scenarioType.contains("主流程")) {
+            return base + "写后读验证场景";
+        }
+        if (scenarioType.contains("逆向流程")) {
+            return base + "状态回退场景";
+        }
+        if (mappings.size() > 1) {
+            return base + "多接口联动场景";
+        }
+        return base + "接口变更验证场景";
+    }
+
+    private ControllerMapping selectEntryMapping(List<ControllerMapping> mappings) {
+        return mappings.isEmpty() ? null : mappings.get(0);
+    }
+
+    private List<String> toInterfaceChain(List<ControllerMapping> mappings) {
+        List<String> chain = new ArrayList<>();
+        for (ControllerMapping mapping : mappings) {
+            chain.add(formatMapping(mapping));
+        }
+        return chain;
+    }
+
+    private String buildTriggerCondition(List<String> changedClasses,
+                                         List<String> changedMethods,
+                                         List<ControllerMapping> mappings) {
+        List<String> parts = new ArrayList<>();
+        if (!changedMethods.isEmpty()) {
+            parts.add("受变更方法影响: " + joinNames(changedMethods, 3));
+        }
+        if (!changedClasses.isEmpty()) {
+            parts.add("受变更类影响: " + joinNames(changedClasses, 2));
+        }
+        if (mappings.size() > 1) {
+            parts.add("需要串联校验同一 Controller 下的接口链");
+        }
+        return parts.isEmpty() ? "需基于本次 diff 补充场景验证" : joinEvidence(parts);
+    }
+
+    private String joinNames(List<String> values, int maxItems) {
+        StringBuilder builder = new StringBuilder();
+        int limit = Math.min(values.size(), maxItems);
+        for (int index = 0; index < limit; index++) {
+            if (index > 0) {
+                builder.append(", ");
+            }
+            builder.append(values.get(index));
+        }
+        if (values.size() > limit) {
+            builder.append(" 等");
+        }
+        return builder.toString();
+    }
+
+    private String buildScenarioEvidence(ControllerDescriptor descriptor,
+                                         List<String> changedFiles,
+                                         List<String> changedClasses,
+                                         List<String> changedMethods,
+                                         List<ControllerMapping> mappings) {
+        List<String> evidenceParts = new ArrayList<>();
+        evidenceParts.add(buildEvidence(descriptor, changedFiles, changedClasses, changedMethods));
+        String businessObject = inferBusinessObject(descriptor, mappings);
+        if (StringUtils.hasText(businessObject)) {
+            evidenceParts.add("共享业务对象: " + businessObject);
+        }
+        List<String> sharedKeyHints = inferSharedKeyHints(descriptor, mappings);
+        if (!sharedKeyHints.isEmpty()) {
+            evidenceParts.add("共享主键: " + sharedKeyHints);
+        }
+        List<String> responseFieldHints = inferResponseFieldHints(mappings, sharedKeyHints);
+        if (!responseFieldHints.isEmpty()) {
+            evidenceParts.add("响应字段: " + responseFieldHints);
+        }
+        List<String> requestBindingHints = inferRequestBindingHints(mappings, sharedKeyHints);
+        if (!requestBindingHints.isEmpty()) {
+            evidenceParts.add("请求绑定: " + requestBindingHints);
+        }
+        List<String> fieldTransferHints = inferFieldTransferHints(responseFieldHints, requestBindingHints);
+        if (!fieldTransferHints.isEmpty()) {
+            evidenceParts.add("字段传递: " + fieldTransferHints);
+        }
+        String dataFlowHint = inferDataFlowHint(mappings, sharedKeyHints);
+        if (StringUtils.hasText(dataFlowHint)) {
+            evidenceParts.add("数据传递: " + dataFlowHint);
+        }
+        String stateTransitionHint = inferStateTransitionHint(mappings);
+        if (StringUtils.hasText(stateTransitionHint)) {
+            evidenceParts.add("状态提示: " + stateTransitionHint);
+        }
+        List<String> dependencyHints = inferDependencyHints(descriptor);
+        if (!dependencyHints.isEmpty()) {
+            evidenceParts.add("依赖提示: " + dependencyHints);
+        }
+        if (mappings.size() > 1) {
+            evidenceParts.add("同 Controller 接口链: " + buildChainKey(mappings));
+        } else if (!mappings.isEmpty()) {
+            evidenceParts.add("入口接口: " + formatMapping(mappings.get(0)));
+        }
+        return joinEvidence(evidenceParts);
+    }
+
+    private String inferBusinessObject(ControllerDescriptor descriptor, List<ControllerMapping> mappings) {
+        if (!mappings.isEmpty()) {
+            String path = mappings.get(0).path;
+            if (StringUtils.hasText(path)) {
+                String normalized = path.replaceAll("\\{[^/]+\\}", "")
+                    .replaceAll("^/+", "")
+                    .replaceAll("/+$", "");
+                if (StringUtils.hasText(normalized)) {
+                    String[] segments = normalized.split("/");
+                    if (segments.length > 0 && StringUtils.hasText(segments[0])) {
+                        return segments[0];
+                    }
+                }
+            }
+        }
+        String controllerClass = descriptor.controllerClass;
+        if (StringUtils.hasText(controllerClass) && controllerClass.endsWith(CONTROLLER_SUFFIX)) {
+            return controllerClass.substring(0, controllerClass.length() - CONTROLLER_SUFFIX.length());
+        }
+        return controllerClass;
+    }
+
+    private String inferStateTransitionHint(List<ControllerMapping> mappings) {
+        boolean hasCreate = hasMethod(mappings, "POST");
+        boolean hasRead = hasMethod(mappings, "GET");
+        boolean hasUpdate = hasMethod(mappings, "PUT") || hasMethod(mappings, HTTP_PATCH);
+        boolean hasDelete = hasMethod(mappings, HTTP_DELETE);
+        if (hasCreate && hasRead && hasUpdate) {
+            return "创建后查询并更新状态";
+        }
+        if (hasCreate && hasRead) {
+            return "创建后查询状态";
+        }
+        if (hasUpdate && hasRead) {
+            return "更新后查询状态";
+        }
+        if (hasDelete && hasRead) {
+            return "删除或取消后校验结果";
+        }
+        if (hasUpdate || hasDelete) {
+            return "存在状态变更动作，需补状态流转校验";
+        }
+        return "场景链待确认";
+    }
+
+    private List<String> inferSharedKeyHints(ControllerDescriptor descriptor, List<ControllerMapping> mappings) {
+        Set<String> keys = new LinkedHashSet<>();
+        for (ControllerMapping mapping : mappings) {
+            if (mapping != null && StringUtils.hasText(mapping.path)) {
+                Matcher matcher = PATH_VARIABLE_PATTERN.matcher(mapping.path);
+                while (matcher.find()) {
+                    keys.add(matcher.group(1));
+                }
+            }
+        }
+        String sourceText = descriptor.sourceText == null ? "" : descriptor.sourceText;
+        Matcher idMatcher = ID_TOKEN_PATTERN.matcher(sourceText);
+        while (idMatcher.find()) {
+            keys.add(idMatcher.group(1));
+        }
+        if (keys.isEmpty() && hasMethod(mappings, "GET") && (hasMethod(mappings, "POST") || hasMethod(mappings, "PUT") || hasMethod(mappings, HTTP_PATCH))) {
+            keys.add("id");
+        }
+        return new ArrayList<>(keys);
+    }
+
+    private String inferDataFlowHint(List<ControllerMapping> mappings, List<String> sharedKeyHints) {
+        String sharedKeys = sharedKeyHints.isEmpty() ? "主键" : joinNames(sharedKeyHints, 2);
+        boolean hasCreate = hasMethod(mappings, "POST");
+        boolean hasRead = hasMethod(mappings, "GET");
+        boolean hasUpdate = hasMethod(mappings, "PUT") || hasMethod(mappings, HTTP_PATCH);
+        boolean hasDelete = hasMethod(mappings, HTTP_DELETE);
+        if (hasCreate && hasRead) {
+            return "使用创建接口返回的 " + sharedKeys + " 驱动后续查询或校验";
+        }
+        if (hasUpdate && hasRead) {
+            return "使用更新接口输入的 " + sharedKeys + " 回查更新后的结果";
+        }
+        if (hasDelete && hasRead) {
+            return "使用删除或取消动作中的 " + sharedKeys + " 校验最终结果";
+        }
+        if (!sharedKeyHints.isEmpty()) {
+            return "相关接口之间通过 " + sharedKeys + " 传递业务对象";
+        }
+        return "数据传递链待确认";
+    }
+
+    private List<String> inferResponseFieldHints(List<ControllerMapping> mappings, List<String> sharedKeyHints) {
+        List<String> hints = new ArrayList<>();
+        ControllerMapping upstream = selectWriteMapping(mappings);
+        if (upstream == null || sharedKeyHints.isEmpty()) {
+            return hints;
+        }
+        for (String sharedKeyHint : sharedKeyHints) {
+            hints.add("response." + normalizeFieldToken(sharedKeyHint));
+        }
+        return hints;
+    }
+
+    private List<String> inferRequestBindingHints(List<ControllerMapping> mappings, List<String> sharedKeyHints) {
+        List<String> hints = new ArrayList<>();
+        if (sharedKeyHints.isEmpty() || mappings.size() <= 1) {
+            return hints;
+        }
+        for (int index = 1; index < mappings.size(); index++) {
+            ControllerMapping mapping = mappings.get(index);
+            for (String sharedKeyHint : sharedKeyHints) {
+                String bindingLocation = resolveBindingLocation(mapping, sharedKeyHint);
+                hints.add(formatMapping(mapping) + " -> " + bindingLocation);
+            }
+        }
+        return hints;
+    }
+
+    private List<String> inferFieldTransferHints(List<String> responseFieldHints, List<String> requestBindingHints) {
+        List<String> hints = new ArrayList<>();
+        if (responseFieldHints.isEmpty() || requestBindingHints.isEmpty()) {
+            return hints;
+        }
+        for (String responseFieldHint : responseFieldHints) {
+            String fieldName = responseFieldHint.substring(responseFieldHint.lastIndexOf('.') + 1);
+            for (String requestBindingHint : requestBindingHints) {
+                if (requestBindingHint.toLowerCase(Locale.ROOT).contains(fieldName.toLowerCase(Locale.ROOT))) {
+                    hints.add(responseFieldHint + " -> " + requestBindingHint);
+                }
+            }
+        }
+        return hints;
+    }
+
+    private ControllerMapping selectWriteMapping(List<ControllerMapping> mappings) {
+        for (ControllerMapping mapping : mappings) {
+            if (mapping != null && ("POST".equalsIgnoreCase(mapping.httpMethod)
+                || "PUT".equalsIgnoreCase(mapping.httpMethod)
+                || HTTP_PATCH.equalsIgnoreCase(mapping.httpMethod))) {
+                return mapping;
+            }
+        }
+        return mappings.isEmpty() ? null : mappings.get(0);
+    }
+
+    private String resolveBindingLocation(ControllerMapping mapping, String sharedKeyHint) {
+        String normalizedKey = normalizeFieldToken(sharedKeyHint);
+        if (mapping != null && StringUtils.hasText(mapping.path)) {
+            Matcher matcher = PATH_VARIABLE_PATTERN.matcher(mapping.path);
+            while (matcher.find()) {
+                String variable = matcher.group(1);
+                if (normalizedKey.equalsIgnoreCase(normalizeFieldToken(variable))) {
+                    return "path." + variable;
+                }
+            }
+        }
+        return "request." + normalizedKey;
+    }
+
+    private String normalizeFieldToken(String value) {
+        if (!StringUtils.hasText(value)) {
+            return "id";
+        }
+        return value.replaceAll("^[^A-Za-z]+", "").replaceAll("[^A-Za-z0-9]+$", "");
+    }
+
+    private List<String> inferDependencyHints(ControllerDescriptor descriptor) {
+        List<String> hints = new ArrayList<>();
+        String sourceText = descriptor.sourceText == null ? "" : descriptor.sourceText;
+        String loweredSource = sourceText.toLowerCase(Locale.ROOT);
+        if (loweredSource.contains("repository") || loweredSource.contains("mapper") || loweredSource.contains("dao")) {
+            hints.add(DEP_REPOSITORY);
+        }
+        if (loweredSource.contains("redis") || loweredSource.contains("cache")) {
+            hints.add(DEP_CACHE);
+        }
+        if (loweredSource.contains("resttemplate") || loweredSource.contains("feign") || loweredSource.contains("webclient")
+            || loweredSource.contains("httpclient")) {
+            hints.add(DEP_HTTP);
+        }
+        if (loweredSource.contains("kafka") || loweredSource.contains("rabbit") || loweredSource.contains("rocketmq")
+            || loweredSource.contains("streambridge") || loweredSource.contains("publish") || loweredSource.contains("message")) {
+            hints.add(DEP_MESSAGE);
+        }
+        return hints;
+    }
+
+    private String resolveScenarioPriority(String relationType, List<ControllerMapping> mappings) {
+        if (RELATION_DIRECT.equalsIgnoreCase(relationType)) {
+            return "P0";
+        }
+        if (mappings.size() > 1 || hasMethod(mappings, "POST") && hasMethod(mappings, "GET")) {
+            return "P1";
+        }
+        return "P2";
+    }
+
+    private String formatMapping(ControllerMapping mapping) {
+        if (mapping == null) {
+            return "待补充";
+        }
+        return mapping.httpMethod + " " + mapping.path;
     }
 
     private List<Path> collectControllerFiles(Path javaRoot) throws IOException {
@@ -307,12 +745,12 @@ public class GitDiffService {
             return mapping;
         }
         if (line.startsWith("@DeleteMapping")) {
-            mapping.httpMethod = "DELETE";
+            mapping.httpMethod = HTTP_DELETE;
             mapping.path = extractQuotedPath(line);
             return mapping;
         }
         if (line.startsWith("@PatchMapping")) {
-            mapping.httpMethod = "PATCH";
+            mapping.httpMethod = HTTP_PATCH;
             mapping.path = extractQuotedPath(line);
             return mapping;
         }
@@ -386,7 +824,7 @@ public class GitDiffService {
                                        List<String> changedClasses,
                                        List<String> changedMethods) {
         if (changedFiles.contains(descriptor.relativePath)) {
-            return "DIRECT";
+            return RELATION_DIRECT;
         }
         for (String changedClass : changedClasses) {
             if (descriptor.sourceText.contains(changedClass)) {
