@@ -16,6 +16,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 import com.apitestagent.config.AgentStorageProperties;
+import com.apitestagent.config.AnalysisProperties;
 import com.apitestagent.domain.TaskRecord;
 import com.apitestagent.engine.AnalysisEngine;
 import com.apitestagent.web.dto.CreateTaskRequest;
@@ -35,6 +36,7 @@ class AgentTaskServiceFailureTests {
         AgentStorageProperties properties = new AgentStorageProperties();
         properties.setWorkspaceBaseDir(workspaceBaseDir.toString());
         properties.setSkillsBaseDir(skillsBaseDir.toString());
+        AnalysisProperties analysisProperties = new AnalysisProperties();
 
         ObjectMapper objectMapper = new ObjectMapper().findAndRegisterModules();
         SkillService skillService = new SkillService(properties);
@@ -47,6 +49,7 @@ class AgentTaskServiceFailureTests {
 
         AgentTaskService agentTaskService = new AgentTaskService(
             properties,
+            analysisProperties,
             skillService,
             failingEngine,
             gitDiffService,

@@ -27,7 +27,7 @@ server:
 
 agent:
   analysis:
-    renderer-mode: template
+    renderer-mode: llm
     llm-model: "gpt-5.4-mini"
     llm-base-url: "https://yunwu.ai"
     llm-api-key: "sk-fVnJtleMdAlNcwVeqA57uMmzNVKKXyxQBUjSrkTMrrgslG9b"

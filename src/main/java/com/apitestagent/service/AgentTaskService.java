@@ -20,6 +20,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
 import com.apitestagent.config.AgentStorageProperties;
+import com.apitestagent.config.AnalysisProperties;
 import com.apitestagent.domain.SkillBundle;
 import com.apitestagent.domain.SkillType;
 import com.apitestagent.domain.TaskRecord;
@@ -49,6 +50,8 @@ public class AgentTaskService {
 
     private final AgentStorageProperties properties;
 
+    private final AnalysisProperties analysisProperties;
+
     private final SkillService skillService;
 
     private final AnalysisEngine analysisEngine;
@@ -62,6 +65,7 @@ public class AgentTaskService {
     private final ObjectMapper objectMapper;
 
     public AgentTaskService(AgentStorageProperties properties,
+                            AnalysisProperties analysisProperties,
                             SkillService skillService,
                             AnalysisEngine analysisEngine,
                             GitDiffService gitDiffService,
@@ -69,6 +73,7 @@ public class AgentTaskService {
                             TaskPersistenceService taskPersistenceService,
                             ObjectMapper objectMapper) {
         this.properties = properties;
+                    this.analysisProperties = analysisProperties;
         this.skillService = skillService;
         this.analysisEngine = analysisEngine;
         this.gitDiffService = gitDiffService;
@@ -511,11 +516,15 @@ public class AgentTaskService {
     }
 
     private boolean isLlmRendered(CreateTaskRequest request) {
+        return "llm".equalsIgnoreCase(resolveRendererMode(request));
+    }
+
+    private String resolveRendererMode(CreateTaskRequest request) {
         Map<String, Object> options = request.getOptions();
         if (options != null && options.get("rendererMode") != null) {
-            return "llm".equalsIgnoreCase(String.valueOf(options.get("rendererMode")));
+            return String.valueOf(options.get("rendererMode"));
         }
-        return false;
+        return analysisProperties.getRendererMode();
     }
 
     private String buildCompletionMessage(boolean llmRendered, boolean sourceResolved) {
