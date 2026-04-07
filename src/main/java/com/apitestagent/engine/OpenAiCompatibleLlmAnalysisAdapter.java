@@ -194,6 +194,10 @@ public class OpenAiCompatibleLlmAnalysisAdapter implements LlmAnalysisAdapter {
         if (StringUtils.hasText(content)) {
             return content;
         }
+        content = extractTextValue(root.path(CHOICES_FIELD).path(0).path("delta").path(CONTENT_FIELD));
+        if (StringUtils.hasText(content)) {
+            return content;
+        }
         content = extractTextValue(root.path(CHOICES_FIELD).path(0).path(TEXT_FIELD));
         if (StringUtils.hasText(content)) {
             return content;

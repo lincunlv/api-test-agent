@@ -120,11 +120,13 @@ public class AgentTaskService {
             appendArtifact(taskRecord, skillType.getArtifactFileName());
             persistAndTrace(taskRecord, "ARTIFACT_WRITTEN", TaskStatus.RUNNING.name(), "结构化结果已生成", buildArtifactDetails(skillType.getArtifactFileName(), analysisExecutionResult));
 
-            taskRecord.setMessage(buildCompletionMessage(methodSourceView != null));
-            taskRecord.setStatus(TaskStatus.PARTIAL_SUCCESS);
+            boolean llmRendered = isLlmRendered(request);
+            TaskStatus completionStatus = llmRendered ? TaskStatus.SUCCESS : TaskStatus.PARTIAL_SUCCESS;
+            taskRecord.setMessage(buildCompletionMessage(llmRendered, methodSourceView != null));
+            taskRecord.setStatus(completionStatus);
             taskRecord.setUpdatedAt(Instant.now());
             appendArtifact(taskRecord, TRACE_SUMMARY_FILE_NAME);
-            persistAndTrace(taskRecord, "COMPLETED", TaskStatus.PARTIAL_SUCCESS.name(), taskRecord.getMessage(), simpleDetails("artifacts", taskRecord.getArtifacts()));
+            persistAndTrace(taskRecord, "COMPLETED", completionStatus.name(), taskRecord.getMessage(), simpleDetails("artifacts", taskRecord.getArtifacts()));
             tasks.put(taskId, taskRecord);
             return TaskView.from(taskRecord);
         } catch (IOException ex) {
@@ -508,7 +510,21 @@ public class AgentTaskService {
         return details;
     }
 
-    private String buildCompletionMessage(boolean sourceResolved) {
+    private boolean isLlmRendered(CreateTaskRequest request) {
+        Map<String, Object> options = request.getOptions();
+        if (options != null && options.get("rendererMode") != null) {
+            return "llm".equalsIgnoreCase(String.valueOf(options.get("rendererMode")));
+        }
+        return false;
+    }
+
+    private String buildCompletionMessage(boolean llmRendered, boolean sourceResolved) {
+        if (llmRendered) {
+            if (sourceResolved) {
+                return "已通过 LLM 生成分析结果，并自动补充了源码上下文。";
+            }
+            return "已通过 LLM 生成分析结果；当前未补充源码上下文。";
+        }
         if (sourceResolved) {
             return "已生成结构化草稿，并自动补充了源码上下文；待接入真实模型执行引擎。";
         }
